@@ -22,3 +22,8 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PHANMEMCUATOI_270195 }}
           channelId: live
           projectId: phanmemcuatoi-270195
+
+          # Thêm dòng này để khớp với cấu hình trong firebase.json
+          entryPoint: .
+          # Đây là chỗ quan trọng nhất:
+          public: dist/web
