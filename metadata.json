@@ -1,0 +1,6 @@
+{
+  "name": "Báo cáo Quân số",
+  "description": "Ứng dụng quản lý danh sách biên chế và tổng hợp báo cáo quân số đơn giản, trực quan.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
