@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import LoginPage from './LoginPage';
 import DashboardPage from './DashboardPage';
-import DutyReportPage from './DutyReportPage'; // Import trang mới
+import DutyReportPage from './components/DutyReportPage'; // Import trang mới
 import RegistrationPage from './RegistrationPage';
 import { onAuthStateChanged, User as FirebaseUser, signOut } from 'firebase/auth';
 import { auth } from './firebase';

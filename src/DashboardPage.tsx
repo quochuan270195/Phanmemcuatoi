@@ -37,6 +37,10 @@ import { Upload, FilePlus, Replace, FileDiff } from "lucide-react";
 import { Link } from 'react-router-dom';
 import { onSnapshot, doc } from "firebase/firestore"; // Lấy từ thư viện gốc
 import { auth, db, taiDuLieuTuDamMay, dongBoLenDamMay } from "./firebase";
+import HeaderDashboard from "./components/HeaderDashboard";
+import Bangtonghopquanso from "./components/Bangtonghopquanso";
+import Danhsachbienche from "./components/Danhsachbienche";
+import Thongkequanso from "./components/Thongkequanso";
 
 
 
@@ -88,6 +92,11 @@ interface DailyReport {
   absent: number;
   notes: string;
 }
+
+
+
+
+
 // Pre-defined values requested
 const RANKS = ["1//", "4/", "3/", "2/", "1/", "H3", "H2", "H1", "B1", "B2"];
 const POSITIONS = ["Đại đội trưởng", "Chính trị viên", "Phó Đại đội trưởng", "Trung đội trưởng", "Tiểu đội trưởng", "Nhân viên Quân y", "Nhân viên Quản lý", "Liên lạc", "Chiến sĩ"];
@@ -717,11 +726,12 @@ const [isDirty, setIsDirty] = useState(false);
           
           if (trulyNewSoldiers.length > 0) {
             setRoster(prevRoster => [...prevRoster, ...trulyNewSoldiers]);
+              setIsDirty(true);// Kích hoạt tự đồng bộ          
             feedbackMessage = `Đã bổ sung chọn lọc ${trulyNewSoldiers.length} quân nhân mới. `;
             const duplicateCount = newSoldiers.length - trulyNewSoldiers.length;
             if (duplicateCount > 0) {
               feedbackMessage += `${duplicateCount} quân nhân đã tồn tại và được bỏ qua.`;
-            }
+            }  setIsDirty(true);// Kích hoạt tự đồng bộ
           } else if (newSoldiers.length > 0) {
             feedbackMessage = "Tất cả quân nhân trong file đã có trong danh sách. Không có gì được thêm.";
           }
@@ -731,6 +741,8 @@ const [isDirty, setIsDirty] = useState(false);
           } else { // append
             setRoster(prevRoster => [...prevRoster, ...newSoldiers]);
           }
+            setIsDirty(true);// Kích hoạt tự đồng bộ
+
           feedbackMessage = `Đã nhập thành công ${newSoldiers.length} quân nhân. `;
         }
 
@@ -1433,1141 +1445,102 @@ const [isDirty, setIsDirty] = useState(false);
         )}
       </AnimatePresence>
 
-      {/* Header Panel */}
-      <header className="bg-emerald-950 text-white shadow-md print:bg-white print:text-black print:shadow-none">
-        <div className="max-w-7xl mx-auto px-4 py-6 md:py-8 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
-          <div className="flex items-center space-x-4">
-            <div className="p-3 bg-emerald-800 rounded-lg text-emerald-100 print:hidden">
-              <Users className="w-8 h-8" />
-            </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="text-xs bg-emerald-700 text-emerald-100 px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold print:hidden">
-                  Quân đội Nhân dân Việt Nam Anh Hùng
-                </span>
-              </div>
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight mt-1 text-slate-100 print:text-black">
-                Báo cáo Quân số & Danh sách Biên chế
-              </h1>
-              <p className="text-slate-300 text-sm mt-0.5 print:text-slate-700">
-                Đại đội Bảo vệ - Trung tâm HLQSQG 2
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex items-center space-x-4 print:hidden">
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={copyMarkdownToClipboard}
-                className="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white px-3.5 py-2 rounded-lg text-sm font-medium transition shadow-sm border border-slate-700"
-                title="Sao chép dưới dạng bảng Markdown"
-                id="btn-copy-markdown"
-              >
-                <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-                <span>Copy Markdown</span>
-              </button>
-              <button
-                onClick={handlePrint}
-                className="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white px-3.5 py-2 rounded-lg text-sm font-medium transition shadow-sm border border-slate-700"
-                id="btn-print-report"
-              >
-                <Printer className="w-4 h-4 text-emerald-400" />
-                <span>In báo cáo</span>
-              </button>
-            </div>
-
-            {/* User Menu Dropdown */}
-            <div className="relative">
-              <button onClick={() => setIsUserMenuOpen(!isUserMenuOpen)} className="p-2 rounded-full hover:bg-emerald-800 transition-colors">
-                <MoreVertical className="w-5 h-5" />
-              </button>
-              <AnimatePresence>
-                {isUserMenuOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-xl z-20 text-slate-800"
-                  >
-                    <div className="p-4 border-b border-slate-200">
-                      <p className="font-semibold text-sm">{user.name}</p>
-                      <p className="text-xs text-slate-500">{user.email}</p>
-                    </div>
-                    <button onClick={onLogout} className="w-full text-left flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-100">
-                      <LogOut className="w-4 h-4 text-slate-500" />
-                      <span>Đăng xuất</span>
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-        </div>
-      </header>
+         // Trong file DashboardPage.tsx
+          <HeaderDashboard 
+           user={user} 
+           onLogout={onLogout} 
+          copyMarkdownToClipboard={copyMarkdownToClipboard} 
+          handlePrint={handlePrint} 
+           isUserMenuOpen={isUserMenuOpen} 
+           setIsUserMenuOpen={setIsUserMenuOpen} 
+            />
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 py-8 space-y-8 print:w-[16cm] print:mx-auto">
         
-        {/* Section 2 (Top): Bảng Tổng hợp Quân số (Aggregated Summary) */}
-        <section id="summary-section" className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden print:border-none print:shadow-none">
-          <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between print:bg-slate-100 print:text-black print:border-b">
-            <div className="flex items-center space-x-2">
-              <FileText className="w-5 h-5 text-emerald-400 print:text-emerald-800" />
-              <h2 className="text-lg font-bold uppercase tracking-wide">Bảng Tổng Hợp Báo Cáo Quân Số</h2>
-            </div>
-            <div className="text-xs bg-emerald-800/60 text-emerald-200 px-2.5 py-1 rounded font-mono print:hidden">
-              Cập nhật thời gian thực
-            </div>
-          </div>
-          
-          <div className="p-6">
-            {/* Quick Metrics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 print:grid-cols-3">
-              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tổng quân số</p>
-                  <p className="text-3xl font-bold font-mono text-slate-900 mt-1">{reportToDisplay.total} <span className="text-sm font-normal text-slate-500">đ/c</span></p>
-                </div>
-                <div className="p-2.5 bg-slate-200 text-slate-700 rounded-full">
-                  <Users className="w-6 h-6" />
-                </div>
-              </div>
+         {/* Bảng tổng hợp quân số*/}
+        <Bangtonghopquanso 
+  reportToDisplay={reportToDisplay}
+  viewingReport={viewingReport}
+  collapsedSummarySections={collapsedSummarySections}
+  toggleSummaryCollapse={toggleSummaryCollapse}
+  unitSummaries={unitSummaries}
+  roster={roster}
+  saveDailyReport={saveDailyReport}
+  dailyReports={dailyReports}
+  setViewingReport={setViewingReport}
+  historySearchDate={historySearchDate}
+  setHistorySearchDate={setHistorySearchDate}
+  setSearchedReport={setSearchedReport}
+  searchedReport={searchedReport}
+/>
+ {/* Bảng tổng hợp quân số*/}
 
-              <div className={`p-4 rounded-lg border flex items-center justify-between ${viewingReport ? 'bg-slate-50 border-slate-200' : 'bg-emerald-50 border-emerald-100'}`}>
-                <div>
-                  <p className={`text-xs font-semibold uppercase tracking-wider ${viewingReport ? 'text-slate-500' : 'text-emerald-700'}`}>Có mặt</p>
-                  <p className={`text-3xl font-bold font-mono mt-1 ${viewingReport ? 'text-slate-900' : 'text-emerald-900'}`}>{reportToDisplay.present} <span className={`text-sm font-normal ${viewingReport ? 'text-slate-500' : 'text-emerald-600'}`}>đ/c</span></p>
-                </div>
-                <div className={`p-2.5 rounded-full ${viewingReport ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                  <UserCheck className="w-6 h-6" />
-                </div>
-              </div>
 
-              <div className={`p-4 rounded-lg border flex items-center justify-between ${viewingReport ? 'bg-slate-50 border-slate-200' : 'bg-amber-50 border-amber-100'}`}>
-                <div>
-                  <p className={`text-xs font-semibold uppercase tracking-wider ${viewingReport ? 'text-slate-500' : 'text-amber-700'}`}>Vắng mặt</p>
-                  <p className={`text-3xl font-bold font-mono mt-1 ${viewingReport ? 'text-slate-900' : 'text-amber-900'}`}>{reportToDisplay.absent} <span className={`text-sm font-normal ${viewingReport ? 'text-slate-500' : 'text-amber-600'}`}>đ/c</span></p>
-                </div>
-                <div className="p-2.5 bg-amber-100 text-amber-700 rounded-full">
-                  <UserX className="w-6 h-6" />
-                </div>
-              </div>
-            </div>
-
-            {/* Structured Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse border border-slate-200">
-                <thead>
-                  <tr className="bg-slate-100 text-slate-700 font-bold text-[14px]">
-                    <th className="p-3 border border-slate-200 w-16 text-center">STT</th>
-                    <th className="p-3 border border-slate-200">Nội Dung Báo Cáo</th>
-                    <th className="p-3 border border-slate-200 w-40 text-center">Số Lượng</th>
-                    <th className="p-3 border border-slate-200">Ghi chú / Chi tiết quân số vắng</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 text-[14px]">
-                  <tr>
-                    <td className="p-3 border border-slate-200 text-center font-mono font-medium">1</td>
-                    <td className="p-3 border border-slate-200 font-semibold text-slate-800">Tổng quân số</td>
-                    <td className="p-3 border border-slate-200 text-center font-mono font-bold text-slate-900 bg-slate-50">{reportToDisplay.total} đồng chí</td>
-                    <td className="p-3 border border-slate-200 text-slate-500 italic">Toàn bộ quân số.</td>
-                  </tr>
-                  <tr className="bg-emerald-50/20">
-                    <td className="p-3 border border-slate-200 text-center font-mono font-medium">2</td>
-                    <td className="p-3 border border-slate-200 font-semibold text-emerald-900">Quân số có mặt</td>
-                    <td className="p-3 border border-slate-200 text-center font-mono font-bold text-emerald-800 bg-emerald-50/40">{reportToDisplay.present} đồng chí</td>
-                    <td className="p-3 border border-slate-200 text-emerald-700">Có mặt.</td>
-                  </tr>
-                  <tr className="bg-amber-50/20">
-                    <td className="p-3 border border-slate-200 text-center font-mono font-medium">3</td>
-                    <td className="p-3 border border-slate-200 font-semibold text-amber-900">Quân số vắng mặt</td>
-                    <td className="p-3 border border-slate-200 text-center font-mono font-bold text-amber-800 bg-amber-50/40">{reportToDisplay.absent} đồng chí</td>
-                    <td className="p-3 border border-slate-200 text-slate-700 font-medium">
-                      {reportToDisplay.absent > 0 ? (
-                        <div className="flex items-start space-x-1.5">
-                          <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                          <span>{reportToDisplay.notes}</span>
-                        </div>
-                      ) : (
-                        <span className="text-emerald-700 font-semibold">Đơn vị đủ 100% quân số, không vắng mặt.</span>
-                      )}
-                    </td>
-                  </tr>
-                  {/* --- Collapsible Unit Summartties --- */}
-                  { !viewingReport && (
-                    <>
-                      {/* Ban chỉ huy Đại đội */}
-                      <tr onClick={() => toggleSummaryCollapse('BCHc')} className="bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors">
-                        <td className="p-3 border border-slate-200 text-center font-mono font-medium flex items-center justify-center">
-                          <ChevronDown className={`w-4 h-4 transition-transform ${collapsedSummarySections.has('BCHc') ? '-rotate-90' : 'rotate-0'}`} />
-                        </td>
-                        <td className="p-3 border border-slate-200 font-semibold text-slate-700">Ban chỉ huy Đại đội</td>
-                        <td className="p-3 border border-slate-200 text-center font-mono font-bold text-slate-800">{unitSummaries.BCHc.total}</td>
-                        <td className="p-3 border border-slate-200 text-slate-500 italic">QS: {unitSummaries.BCHc.total} | Có mặt: {unitSummaries.BCHc.present} | Vắng: {unitSummaries.BCHc.absent}</td>
-                      </tr>
-                      {!collapsedSummarySections.has('BCHc') && (
-                        <tr className="bg-slate-50">
-                          <td colSpan={4} className="p-0 border-x border-slate-200"><div className="px-6 pb-3 text-xs text-slate-600">Tổng quân số: {unitSummaries.BCHc.total}, Có mặt: {unitSummaries.BCHc.present}, Vắng: {unitSummaries.BCHc.absent}</div></td>
-                        </tr>
-                      )}
-
-                      {/* Đại đội bộ */}
-                      <tr onClick={() => toggleSummaryCollapse('cBo')} className="bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors">
-                        <td className="p-3 border border-slate-200 text-center font-mono font-medium flex items-center justify-center">
-                          <ChevronDown className={`w-4 h-4 transition-transform ${collapsedSummarySections.has('cBo') ? '-rotate-90' : 'rotate-0'}`} />
-                        </td>
-                        <td className="p-3 border border-slate-200 font-semibold text-slate-700">Đại đội bộ</td>
-                        <td className="p-3 border border-slate-200 text-center font-mono font-bold text-slate-800">{unitSummaries.cBo.total}</td>
-                        <td className="p-3 border border-slate-200 text-slate-500 italic">QS: {unitSummaries.cBo.total} | Có mặt: {unitSummaries.cBo.present} | Vắng: {unitSummaries.cBo.absent}</td>
-                      </tr>
-                      {!collapsedSummarySections.has('cBo') && (
-                        <tr className="bg-slate-50">
-                          <td colSpan={4} className="p-0 border-x border-slate-200"><div className="px-6 pb-3 text-xs text-slate-600">Tổng quân số: {unitSummaries.cBo.total}, Có mặt: {unitSummaries.cBo.present}, Vắng: {unitSummaries.cBo.absent}</div></td>
-                        </tr>
-                      )}
-
-                      {/* Trung đội BV1 */}
-                      <tr onClick={() => toggleSummaryCollapse('bBV1')} className="bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors">
-                        <td className="p-3 border border-slate-200 text-center font-mono font-medium flex items-center justify-center">
-                          <ChevronDown className={`w-4 h-4 transition-transform ${collapsedSummarySections.has('bBV1') ? '-rotate-90' : 'rotate-0'}`} />
-                        </td>
-                        <td className="p-3 border border-slate-200 font-semibold text-slate-700">Trung đội Bảo vệ 1</td>
-                        <td className="p-3 border border-slate-200 text-center font-mono font-bold text-slate-800">{unitSummaries.bBV1.total}</td>
-                        <td className="p-3 border border-slate-200 text-slate-500 italic">QS: {unitSummaries.bBV1.total} | Có mặt: {unitSummaries.bBV1.present} | Vắng: {unitSummaries.bBV1.absent}</td>
-                      </tr>
-                      {!collapsedSummarySections.has('bBV1') && (
-                        <tr className="bg-slate-50">
-                          <td colSpan={4} className="p-0 border-x border-slate-200"><div className="px-6 pb-3 text-xs text-slate-600">Tổng quân số: {unitSummaries.bBV1.total}, Có mặt: {unitSummaries.bBV1.present}, Vắng: {unitSummaries.bBV1.absent}</div></td>
-                        </tr>
-                      )}
-
-                      {/* Trung đội BV2 */}
-                      <tr onClick={() => toggleSummaryCollapse('bBV2')} className="bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors">
-                        <td className="p-3 border border-slate-200 text-center font-mono font-medium flex items-center justify-center">
-                          <ChevronDown className={`w-4 h-4 transition-transform ${collapsedSummarySections.has('bBV2') ? '-rotate-90' : 'rotate-0'}`} />
-                        </td>
-                        <td className="p-3 border border-slate-200 font-semibold text-slate-700">Trung đội Bảo vệ 2</td>
-                        <td className="p-3 border border-slate-200 text-center font-mono font-bold text-slate-800">{unitSummaries.bBV2.total}</td>
-                        <td className="p-3 border border-slate-200 text-slate-500 italic">QS: {unitSummaries.bBV2.total} | Có mặt: {unitSummaries.bBV2.present} | Vắng: {unitSummaries.bBV2.absent}</td>
-                      </tr>
-                      {!collapsedSummarySections.has('bBV2') && (
-                        <tr className="bg-slate-50">
-                          <td colSpan={4} className="p-0 border-x border-b border-slate-200"><div className="px-6 pb-3 text-xs text-slate-600">Tổng quân số: {unitSummaries.bBV2.total}, Có mặt: {unitSummaries.bBV2.present}, Vắng: {unitSummaries.bBV2.absent}</div></td>
-                        </tr>
-                      )}
-                    </>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Daily Reports History */}
-            <div className="mt-6 border-t border-slate-200 pt-6">
-              <h3 className="text-base font-bold text-slate-800 mb-3">Lịch sử báo cáo quân số hàng ngày</h3>
-              <div className="space-y-3">
-                <div className="flex flex-wrap gap-3">
-                  <Link
-                    to="/duty-report"
-                    state={{ roster: roster }}
-                    className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center space-x-2"
-                  >
-                    <FileClock className="w-4 h-4" />
-                    <span>Báo cáo quân số thực hiện NV</span>
-                  </Link>
-                  <button
-                    onClick={saveDailyReport}
-                    className="flex-shrink-0 bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition"
-                  >
-                    Lưu báo cáo hôm nay
-                  </button>
-                </div>
-                <div className="flex flex-wrap items-center gap-3 bg-slate-50 p-3 rounded-lg border">
-                <button
-                
-                
-                
-                // onClick={() => setViewingReport(null)}
-                  className={`px-3 py-1.5 rounded-md text-sm font-semibold transition ${!viewingReport ? 'bg-emerald-600 text-white shadow' : 'bg-white hover:bg-slate-100 text-slate-700 border'}`}
-                  // Đã sửa: Hợp nhất hai thuộc tính onClick thành một
-                  // Lỗi: JSX không cho phép hai thuộc tính cùng tên trên một element.
-                  // Giải pháp: Gộp logic của cả hai hàm vào một hàm duy nhất.
-                 
-                  onClick={() => { 
-                    setViewingReport(null);
-                    setHistorySearchDate(''); // Xóa ngày tìm kiếm khi chọn xem trực tiếp
-                    setSearchedReport(null); // Xóa báo cáo đã tìm kiếm
-                  }}
-                >
-                  Xem trực tiếp
-                </button>
-                {dailyReports.slice(0, 2).map(report => (
-                  <button
-                    key={report.date}
-                    onClick={() => {
-                      setViewingReport(report);
-                      setHistorySearchDate(''); // Xóa ngày tìm kiếm khi chọn báo cáo gần nhất
-                      setSearchedReport(null); // Xóa báo cáo đã tìm kiếm
-                    }}
-                    className={`px-3 py-1.5 rounded-md text-sm font-semibold transition ${viewingReport?.date === report.date ? 'bg-emerald-600 text-white shadow' : 'bg-white hover:bg-slate-100 text-slate-700 border'}`}
-                  >
-                    Ngày {new Date(report.date + 'T00:00:00').toLocaleDateString('vi-VN')}
-                  </button>
-                ))}
-                {historySearchDate && searchedReport &&
-                  !dailyReports.slice(0, 2).some(r => r.date === searchedReport.date) && (
-                    <button
-                      key={searchedReport.date}
-                      onClick={() => setViewingReport(searchedReport)}
-                      className={`px-3 py-1.5 rounded-md text-sm font-semibold transition ${viewingReport?.date === searchedReport.date ? 'bg-emerald-600 text-white shadow' : 'bg-white hover:bg-slate-100 text-slate-700 border'}`}
-                    >
-                      Ngày {new Date(searchedReport.date + 'T00:00:00').toLocaleDateString('vi-VN')}
-                    </button>
-                  )}
-                <div className="relative">
-                  <Search className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                  <input
-                    type="date"
-                    value={historySearchDate}
-                    onChange={(e) => {
-                      setHistorySearchDate(e.target.value);
-                      const foundReport = dailyReports.find(r => r.date === e.target.value);
-                      setSearchedReport(foundReport || null);
-                      setViewingReport(foundReport || null);
-                    }}
-                    className="pl-7 pr-2 py-1.5 border border-slate-300 rounded-md text-sm font-normal focus:ring-1 focus:ring-emerald-500 focus:outline-none"
-                  />
-                </div>
-                {historySearchDate && !searchedReport && (
-                  <p className="text-sm text-red-500 ml-2">Không tìm thấy báo cáo cho ngày này.</p>
-                  )}
-                </div>
-               </div>
-            </div>
-          </div>
-        </section>
+{/* Danh sách biên chế*/}
+<Danhsachbienche
+  // Dữ liệu
+  roster={roster}
+  filteredRoster={filteredRoster}
+  searchTerm={searchTerm}
+  setSearchTerm={setSearchTerm}
+  filterNote={filterNote}
+  setFilterNote={setFilterNote}
 
 
 
 
-        {/* Section 1 (Bottom): Danh sách Biên chế Chi tiết (Editable Roster) */}
-        <section id="roster-section" className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden print:border-none print:shadow-none">
-          <div className="bg-slate-900 text-white px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:bg-slate-100 print:text-black print:border-b">
-            <div className="flex items-center space-x-2">
-              <Users className="w-5 h-5 text-emerald-400 print:text-emerald-800" />
-              <h2 className="text-lg font-bold uppercase tracking-wide">Danh Sách Biên Chế Chi Tiết</h2>
-            </div>
-            
-            {/* Quick Filter & Search Bar */}
-            <div className="flex flex-wrap items-center gap-2 print:hidden">
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Tìm kiếm quân nhân..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="bg-slate-800 text-slate-100 placeholder-slate-400 pl-9 pr-4 py-1.5 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 w-44 focus:w-56 transition-all"
-                />
-                {searchTerm && (
-                  <button onClick={() => setSearchTerm("")} className="absolute right-2 top-2 text-slate-400 hover:text-white">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
 
-              <select
-                value={filterNote}
-                onChange={(e) => setFilterNote(e.target.value)}
-                className="bg-slate-800 text-slate-200 text-xs px-2.5 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              >
-                <option value="all">Tất cả trạng thái</option>
-                <option value="Có mặt">Chỉ có mặt</option>
-                <option value="Vắng mặt">Tổng vắng mặt</option>
-                {NOTES_PRESETS.filter(p => p.value !== 'Có mặt').map(p => (
-                  <option key={p.value} value={p.value}>{p.label}</option>
-                ))}
-              </select>
 
-             
 
-              <button
-                onClick={() => setIsAdding(!isAdding)}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center space-x-1"
-                id="btn-add-toggle"
-              >
-                {isAdding ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-                <span>{isAdding ? "Đóng form" : "Thêm mới"}</span>
-              </button>
-            </div>
+  // State cho Form & Editing
+  newForm={newForm}
+  setNewForm={setNewForm}
+  editForm={editForm}
+  setEditForm={setEditForm}
+  editingId={editingId}
+  isAdding={isAdding}
+  setIsAdding={setIsAdding}
+  
+  // State hiển thị cột
+  showEnlistmentColumn={showEnlistmentColumn}
+  showRankColumn={showRankColumn}
+  showPositionColumn={showPositionColumn}
+  showRemarkColumn={showRemarkColumn}
+  showStatusColumn={showStatusColumn}
+  showActionsColumn={showActionsColumn}
+  
+  // Các hàm chức năng
+  handleAddSoldier={handleAddSoldier}
+  handleDelete={handleDelete}
+  startEdit={startEdit}
+  saveEdit={saveEdit}
+  cancelEdit={cancelEdit}
+  setViewingSoldier={setViewingSoldier}
+  toggleCollapse={toggleCollapse}
+  collapsedSections={collapsedSections}
+  
+  // Constants
+  RANKS={RANKS}
+  POSITIONS={POSITIONS}
+  NOTES_PRESETS={NOTES_PRESETS}
+/>
+{/* Danh sách biên chế*/}
 
-            {/* Nút nhập từ Excel */}
-            <div className="print:hidden">
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileImport}
-                className="hidden"
-                accept=".xlsx, .xls, .csv"
-              />
-              <button onClick={() => fileInputRef.current?.click()} className="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center space-x-1">
-                <Upload className="w-3.5 h-3.5" />
-                <span>Nhập từ Excel</span>
-              </button>
-            </div>
-          </div>
 
-          <div className="p-6">
-            {/* Expanded Form to Add New Soldier */}
-            <AnimatePresence>
-              {isAdding && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-6 overflow-hidden print:hidden"
-                >
-                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center space-x-2">
-                    <Plus className="w-4 h-4 text-emerald-600" />
-                    <span>Bổ sung quân nhân vào biên chế</span>
-                  </h3>
-                  
-                  {/* Main Info Section */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="lg:col-span-4"><h4 className="font-semibold text-slate-500 text-xs uppercase tracking-wider border-b pb-1">Thông tin chính</h4></div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Họ và tên*</label>
-                      <input
-                        placeholder="VD: Hoàng Văn Minh"
-                        value={newForm.name}
-                        onChange={(e) => setNewForm({ ...newForm, name: e.target.value })}
-                        className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800 font-medium"
-                      />
-                    </div>
 
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Cấp bậc</label>
-                      <select
-                        value={newForm.rank}
-                        onChange={(e) => setNewForm({ ...newForm, rank: e.target.value })}
-                        className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800"
-                      >
-                        {RANKS.map(r => (
-                          <option key={r} value={r}>{r}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Chức vụ</label>
-                      <select
-                        value={newForm.position}
-                        onChange={(e) => setNewForm({ ...newForm, position: e.target.value })}
-                        className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800"
-                      >
-                        {POSITIONS.map(p => (
-                          <option key={p} value={p}>{p}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="sm:col-span-2 lg:col-span-1">
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Đơn vị</label>
-                      <select
-                        value={newForm.unit}
-                        onChange={(e) => setNewForm({ ...newForm, unit: e.target.value })}
-                        className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800"
-                      >
-                          <option value="Ban chỉ huy Đại đội">Ban chỉ huy Đại đội</option>
-                          <option value="Đại đội bộ">Đại đội bộ</option>
-                          <optgroup label="Trung đội Bảo vệ 1">
-                            <option value="Trung đội Bảo vệ 1">Trung đội Bảo vệ 1 (Biên chế trung đội)</option>
-                            <option value="Tiểu đội Bảo vệ 1">Tiểu đội Bảo vệ 1</option>
-                            <option value="Tiểu đội Bảo vệ 2">Tiểu đội Bảo vệ 2</option>
-                            <option value="Tiểu đội Bảo vệ 3">Tiểu đội Bảo vệ 3</option>
-                          </optgroup>
-                          <optgroup label="Trung đội Bảo vệ 2">
-                            <option value="Trung đội Bảo vệ 2">Trung đội Bảo vệ 2 (Biên chế trung đội)</option>
-                            <option value="Tiểu đội Bảo vệ 4">Tiểu đội Bảo vệ 4</option>
-                            <option value="Tiểu đội Bảo vệ 5">Tiểu đội Bảo vệ 5</option>
-                            <option value="Tiểu đội Bảo vệ 6">Tiểu đội Bảo vệ 6</option>
-                          </optgroup>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Tháng/Năm nhập ngũ</label>
-                      <input
-                        type="text"
-                        placeholder="VD: 02/2026"
-                        value={newForm.enlistmentDate}
-                        onChange={(e) => setNewForm({ ...newForm, enlistmentDate: e.target.value })}
-                        className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800 font-mono"
-                      />
-                    </div>
-
-                    <div className="lg:col-span-4 mt-4"><h4 className="font-semibold text-slate-500 text-xs uppercase tracking-wider border-b pb-1">Thông tin cá nhân & Lý lịch</h4></div>
-                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Ngày sinh</label>
-                      <input
-                        type="text"
-                        placeholder="VD: 25/12/2004"
-                        value={newForm.dateOfBirth}
-                        onChange={(e) => setNewForm({ ...newForm, dateOfBirth: e.target.value })}
-                        className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800 font-mono"
-                      />
-                    </div>
-
-                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Văn hóa</label>
-                      <input
-                        type="text"
-                        placeholder="VD: 12/12"
-                        value={newForm.education}
-                        onChange={(e) => setNewForm({ ...newForm, education: e.target.value })}
-                        className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800"
-                      />
-                    </div>
-
-                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Dân tộc</label>
-                      <input
-                        type="text"
-                        placeholder="VD: Kinh"
-                        value={newForm.ethnicity}
-                        onChange={(e) => setNewForm({ ...newForm, ethnicity: e.target.value })}
-                        className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Số CCCD</label>
-                      <input type="text" placeholder="VD: 012345678910" value={newForm.cccd} onChange={(e) => setNewForm({ ...newForm, cccd: e.target.value })} className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800 font-mono" />
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Quê quán</label>
-                      <input type="text" placeholder="VD: Xã A, Huyện B, Tỉnh C" value={newForm.hometown} onChange={(e) => setNewForm({ ...newForm, hometown: e.target.value })} className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800" />
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Trú quán</label>
-                      <input type="text" placeholder="VD: Xã A, Huyện B, Tỉnh C" value={newForm.currentResidence} onChange={(e) => setNewForm({ ...newForm, currentResidence: e.target.value })} className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800" />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Tôn giáo</label>
-                      <input type="text" placeholder="VD: Không" value={newForm.religion} onChange={(e) => setNewForm({ ...newForm, religion: e.target.value })} className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800" />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Ngày vào Đoàn</label>
-                      <input type="text" placeholder="VD: 26/03/2020" value={newForm.youthUnionJoinDate} onChange={(e) => setNewForm({ ...newForm, youthUnionJoinDate: e.target.value })} className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800 font-mono" />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Ngày vào Đảng</label>
-                      <input type="text" placeholder="VD: 03/02/2025" value={newForm.partyJoinDate} onChange={(e) => setNewForm({ ...newForm, partyJoinDate: e.target.value })} className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800 font-mono" />
-                    </div>
-
-                    <div className="lg:col-span-4 mt-4"><h4 className="font-semibold text-slate-500 text-xs uppercase tracking-wider border-b pb-1">Thông tin gia đình</h4></div>
-                    
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Họ tên cha</label>
-                      <input type="text" value={newForm.fatherName} onChange={(e) => setNewForm({ ...newForm, fatherName: e.target.value })} className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800" />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Họ tên mẹ</label>
-                      <input type="text" value={newForm.motherName} onChange={(e) => setNewForm({ ...newForm, motherName: e.target.value })} className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800" />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Họ tên vợ</label>
-                      <input type="text" placeholder="(Nếu có)" value={newForm.wifeName} onChange={(e) => setNewForm({ ...newForm, wifeName: e.target.value })} className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800" />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Gia đình có mấy con</label>
-                      <input type="number" min="0" value={newForm.numberOfChildren} onChange={(e) => setNewForm({ ...newForm, numberOfChildren: e.target.value })} className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800" />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Con thứ mấy</label>
-                      <input type="text" placeholder="VD: Con đầu" value={newForm.childOrder} onChange={(e) => setNewForm({ ...newForm, childOrder: e.target.value })} className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800" />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">SĐT liên hệ</label>
-                      <input type="text" placeholder="VD: 0987654321" value={newForm.contactPhone} onChange={(e) => setNewForm({ ...newForm, contactPhone: e.target.value })} className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800" />
-                    </div>
-
-                    <div className="lg:col-span-4 mt-4"><h4 className="font-semibold text-slate-500 text-xs uppercase tracking-wider border-b pb-1">Thông tin khác</h4></div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Ngày nhận cấp bậc</label>
-                      <input
-                        type="text"
-                        placeholder="VD: 01/06/2024"
-                        value={newForm.rankReceivedDate}
-                        onChange={(e) => setNewForm({ ...newForm, rankReceivedDate: e.target.value })}
-                        className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800 font-mono"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Ngày nhận chức vụ</label>
-                      <input
-                        type="text"
-                        placeholder="VD: 01/06/2024"
-                        value={newForm.positionReceivedDate}
-                        onChange={(e) => setNewForm({ ...newForm, positionReceivedDate: e.target.value })}
-                        className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800 font-mono"
-                      />
-                    </div>
-
-                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Ghi chú trạng thái</label>
-                      <select
-                        value={newForm.note}
-                        onChange={(e) => setNewForm({ ...newForm, note: e.target.value })}
-                        className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800"
-                      >
-                        {NOTES_PRESETS.map(n => (
-                          <option key={n.value} value={n.value}>{n.label}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                     <div className="sm:col-span-2 lg:col-span-4">
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Ghi chú chi tiết</label>
-                      <input
-                        type="text"
-                        placeholder="VD: Về quê việc gia đình"
-                        value={newForm.remark}
-                        onChange={(e) => setNewForm({ ...newForm, remark: e.target.value })}
-                        className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-slate-800"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end space-x-2 mt-4">
-                    <button
-                      onClick={() => setIsAdding(false)}
-                      className="px-3.5 py-1.5 rounded border border-slate-300 hover:bg-slate-100 text-slate-600 text-xs font-medium transition"
-                    >
-                      Hủy bỏ
-                    </button>
-                    <button
-                      onClick={handleAddSoldier}
-                      className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-xs font-semibold transition flex items-center space-x-1"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Thêm quân nhân</span>
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Soldiers Roster Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse border border-slate-200 font-vietnamese-serif">
-                <thead className="text-[14px] whitespace-nowrap">
-                  <tr className="bg-slate-100 text-slate-700 font-bold">
-                    <th colSpan={2} rowSpan={2} className="p-3 border border-slate-200 border-r-slate-300 text-center align-middle w-24">TT</th>
-                    <th rowSpan={2} className="p-3 border border-slate-200 text-center align-middle min-w-[200px]">Họ và tên</th>
-                    {showEnlistmentColumn && (
-                      <th rowSpan={2} className="p-3 border border-slate-200 text-center align-middle w-32">Nhập ngũ</th>
-                    )}
-                    {showRankColumn && (
-                      <th rowSpan={2} className="p-3 border border-slate-200 text-center align-middle w-28">Cấp bậc</th>
-                    )}
-                    {showPositionColumn && (
-                      <th rowSpan={2} className="p-3 border border-slate-200 text-center align-middle w-40">Chức vụ</th>
-                    )}
-                    {showRemarkColumn && (
-                      <th rowSpan={2} className="p-3 border border-slate-200 text-center align-middle min-w-[150px]">Ghi chú</th>
-                    )}
-                    {showStatusColumn && <th rowSpan={2} className="p-3 border border-slate-200 w-44 text-center align-middle">Trạng thái</th>}
-                    {showActionsColumn && <th rowSpan={2} className="p-3 border border-slate-200 w-24 text-center print:hidden align-middle">Thao tác</th>}
-                  </tr>
-                </thead>
-                <tbody className="text-[14px] whitespace-nowrap">
-                  {filteredRoster.length > 0 ? (
-                    (() => {
-                      let globalIndex = 0; // To maintain continuous numbering
-
-                      // Define the hierarchical structure of units
-                      const hierarchy = [
-                        { name: "Ban chỉ huy Đại đội", type: "header", squads: [] },
-                        { name: "Đại đội bộ", type: "header", squads: [] },
-                        {
-                          name: "Trung đội Bảo vệ 1",
-                          type: "subheader",
-                          squads: ["Tiểu đội Bảo vệ 1", "Tiểu đội Bảo vệ 2", "Tiểu đội Bảo vệ 3"]
-                        },
-                        {
-                          name: "Trung đội Bảo vệ 2",
-                          type: "subheader",
-                          squads: ["Tiểu đội Bảo vệ 4", "Tiểu đội Bảo vệ 5", "Tiểu đội Bảo vệ 6"]
-                        },
-                      ];
-
-                      // Function to render a single soldier row
-                      const renderSoldierRow = (soldier: Soldier, unitIndex: number) => {
-                        globalIndex++;
-                        const isEditing = editingId === soldier.id;
-
-                        return (
-                          <tr 
-                            key={soldier.id} 
-                            className={`hover:bg-slate-50 transition-colors ${
-                              !isEditing && soldier.note !== "Có mặt" && soldier.note 
-                                ? "bg-amber-50/10" 
-                                : ""
-                            }`}
-                          >
-                            {/* STT */}
-                            <td className="p-3 border border-slate-200 text-center font-mono font-medium text-slate-600 bg-slate-50">
-                              {globalIndex}
-                            </td>
-                            {/* Per-Unit STT */}
-                            <td className="p-3 border border-slate-200 border-r-slate-300 text-center font-mono font-medium text-slate-500">
-                              {unitIndex}
-                            </td>
-
-                            {/* Full Name */}
-                            <td className="p-3 border border-slate-200 font-medium text-slate-900 whitespace-normal">
-                              {isEditing ? (
-                                <input
-                                  type="text"
-                                  value={editForm?.name || ""}
-                                  onChange={(e) => setEditForm(prev => prev ? { ...prev, name: e.target.value } : null)}
-                                  className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-sm font-semibold focus:outline-none focus:border-emerald-500 text-slate-800"
-                                />
-                              ) : (
-                                <span onClick={() => setViewingSoldier(soldier)} className="cursor-pointer hover:text-emerald-700 hover:underline">
-                                  {soldier.name}
-                                </span>
-                              )}
-                            </td>
-                            
-                            {/* Enlistment date - Conditionally rendered */}
-                            {showEnlistmentColumn && (
-                              <td className="p-3 border border-slate-200 text-center font-mono text-slate-600">
-                                {isEditing ? (
-                                  <input
-                                    type="text"
-                                    value={editForm?.enlistmentDate || ""}
-                                    onChange={(e) => setEditForm(prev => prev ? { ...prev, enlistmentDate: e.target.value } : null)}
-                                    className="w-full text-center bg-white border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500 text-slate-800 font-mono"
-                                  />
-                                ) : (
-                                  <span>{soldier.enlistmentDate}</span>
-                                )}
-                              </td>
-                            )}
-
-                            {/* Rank - Conditionally rendered */}
-                            {showRankColumn && (
-                              <td className="p-3 border border-slate-200 text-center">
-                                {isEditing ? (
-                                  <select
-                                    value={editForm?.rank || ""}
-                                    onChange={(e) => setEditForm(prev => prev ? { ...prev, rank: e.target.value } : null)}
-                                    className="w-full bg-white border border-slate-300 rounded px-1.5 py-1 text-sm focus:outline-none focus:border-emerald-500 text-slate-800"
-                                  >
-                                    {RANKS.map(r => (
-                                      <option key={r} value={r}>{r}</option>
-                                    ))}
-                                  </select>
-                                ) : (
-                                  <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded text-xs font-semibold">
-                                    {soldier.rank}
-                                  </span>
-                                )}
-                              </td>
-                            )}
-
-                            {/* Position - Conditionally rendered */}
-                            {showPositionColumn && (
-                              <td className="p-3 border border-slate-200 text-center text-slate-700">
-                                {isEditing ? (
-                                  <select
-                                    value={editForm?.position || ""}
-                                    onChange={(e) => setEditForm(prev => prev ? { ...prev, position: e.target.value } : null)}
-                                    className="w-full bg-white border border-slate-300 rounded px-1.5 py-1 text-sm focus:outline-none focus:border-emerald-500 text-slate-800"
-                                  >
-                                    {POSITIONS.map(p => (
-                                      <option key={p} value={p}>{p}</option>
-                                    ))}
-                                  </select>
-                                ) : (
-                                  <span>{soldier.position}</span>
-                                )}
-                              </td>
-                            )}
-
-                            {/* Remark - Conditionally rendered */}
-                            {showRemarkColumn && (
-                              <td className="p-3 border border-slate-200 text-center text-slate-600 whitespace-normal">
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              value={editForm?.remark || ""}
-                              onChange={(e) => setEditForm(prev => prev ? { ...prev, remark: e.target.value } : null)}
-                              className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500 text-slate-800"
-                            />
-                          ) : (
-                            <span>{soldier.remark}</span>
-                          )}
-                              </td>
-                            )}
-                            
-                            {/* Status */}
-                            {showStatusColumn && (
-                              <td className="p-3 border border-slate-200 text-center">
-                                {isEditing ? (
-                                  <select
-                                    value={editForm?.note || ""}
-                                    onChange={(e) => setEditForm(prev => prev ? { ...prev, note: e.target.value } : null)}
-                                    className="w-full bg-white border border-slate-300 rounded px-1.5 py-1 text-sm focus:outline-none focus:border-emerald-500 text-slate-800"
-                                  >
-                                    {NOTES_PRESETS.map(n => (
-                                      <option key={n.value} value={n.value}>{n.label}</option>
-                                    ))}
-                                  </select>
-                                ) : (
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
-                                    soldier.note === "Có mặt" || !soldier.note
-                                      ? "bg-emerald-100 text-emerald-800"
-                                      : "bg-amber-100 text-amber-800"
-                                  }`}>
-                                    {soldier.note || "Có mặt"}
-                                  </span>
-                                )}
-                              </td>
-                            )}
-                            
-                            {/* Actions */}
-                            {showActionsColumn && (
-                              <td className="p-3 border border-slate-200 text-center print:hidden">
-                                <div className="flex items-center justify-center space-x-1">
-                                  {isEditing ? (
-                                    <>
-                                      <button
-                                        onClick={saveEdit}
-                                        className="p-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded transition"
-                                        title="Lưu lại"
-                                      >
-                                        <Check className="w-4 h-4" />
-                                      </button>
-                                      <button
-                                        onClick={cancelEdit}
-                                        className="p-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded transition"
-                                        title="Hủy"
-                                      >
-                                        <X className="w-4 h-4" />
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <button
-                                        onClick={() => startEdit(soldier)}
-                                        className="p-1 text-slate-400 hover:text-emerald-700 hover:bg-slate-100 rounded transition"
-                                        title="Sửa thông tin"
-                                      >
-                                        <Edit2 className="w-4 h-4" />
-                                      </button>
-                                      <button
-                                        onClick={() => handleDelete(soldier.id, soldier.name)}
-                                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-slate-100 rounded transition"
-                                        title="Xóa quân nhân"
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
-                              </td>
-                            )}
-                          </tr>
-                        );
-                      };
-
-                      // Map through the hierarchy to build the table body
-                      return hierarchy.map(unitInfo => {
-                        const elements = [];
-                        
-                        // Get soldiers directly in a top-level unit (e.g., Ban chỉ huy)
-                        const soldiersInUnit = filteredRoster.filter(s => s.unit === unitInfo.name);
-
-                        // Get all soldiers within a platoon's squads
-                        const soldiersInPlatoon = unitInfo.squads.length > 0 
-                          ? filteredRoster.filter(s => s.unit === unitInfo.name || unitInfo.squads.includes(s.unit))
-                          : [];
-
-                        // Only render the unit/platoon if it has soldiers, unless we are searching
-                        if (soldiersInUnit.length === 0 && soldiersInPlatoon.length === 0 && searchTerm === "") {
-                          return null;
-                        }
-
-                        // Add the main header row (for Ban chỉ huy, Đại đội bộ, or Trung đội)
-                        const isCollapsed = collapsedSections.has(unitInfo.name);
-                        const colSpan = 2 + 
-                          (showEnlistmentColumn ? 1 : 0) +
-                          (showRankColumn ? 1 : 0) +
-                          (showPositionColumn ? 1 : 0) +
-                          (showRemarkColumn ? 1 : 0);
-
-                        elements.push(
-                          <tr 
-                            key={`header-${unitInfo.name}`} 
-                            onClick={() => unitInfo.type === 'subheader' && toggleCollapse(unitInfo.name)}
-                            className={`${
-                              unitInfo.type === 'subheader' 
-                                ? "bg-slate-200 font-bold text-slate-800 cursor-pointer hover:bg-slate-300/70"
-                                : "bg-slate-100 font-semibold text-slate-700"
-                            } transition-colors`}
-                          >
-                            <>
-                              <td className="p-2 border border-slate-200 text-center"></td>
-                              <td className="p-2 border border-slate-200 border-r-slate-300"></td>
-                              <td colSpan={colSpan} className="p-2 border border-slate-200">
-                                <span className={`block text-center w-full transition-transform ${isCollapsed ? '' : 'font-extrabold'}`}>
-                                  {unitInfo.name}
-                                </span>
-                              </td>
-                              {showStatusColumn && <td className="p-2 border border-slate-200"></td>}
-                              {showActionsColumn && <td className="p-2 border border-slate-200 print:hidden"></td>}
-                            </>
-                          </tr>
-                        );
-
-                        // Render direct soldiers (for Ban chỉ huy, Đại đội bộ, or Trung đội)
-                        if (!isCollapsed) {
-                          let unitIndexCounter = 0;
-                          soldiersInUnit.forEach(soldier => {
-                            unitIndexCounter++;
-                            elements.push(renderSoldierRow(soldier, unitIndexCounter));
-                          });
-                        }
-
-                        // If the platoon is not collapsed, render its squads and soldiers
-                        if (!isCollapsed) {
-                          // Render squads and their soldiers (for Trung đội)
-                          unitInfo.squads.forEach(squadName => {
-                            const soldiersInSquad = filteredRoster.filter(s => s.unit === squadName);
-                            if (soldiersInSquad.length > 0) {
-                              const isSquadCollapsed = collapsedSections.has(squadName);
-                              // Add squad sub-header
-                              elements.push(
-                                <tr 
-                                  key={`header-${squadName}`} 
-                                  onClick={() => toggleCollapse(squadName)}
-                                  className="bg-slate-100 font-semibold text-slate-700 cursor-pointer hover:bg-slate-200/70 transition-colors"
-                                >
-                                  <>
-                                    <td className="p-2 border border-slate-200 text-center"></td>
-                                    <td className="p-2 border border-slate-200 border-r-slate-300"></td>                                    
-                                    <td colSpan={colSpan} className="p-2 border border-slate-200">
-                                      <span className={`block text-center w-full transition-transform ${isSquadCollapsed ? '' : 'font-extrabold'}`}>{squadName}</span>
-                                    </td>
-                                    {showStatusColumn && <td className="p-2 border border-slate-200"></td>}
-                                    {showActionsColumn && <td className="p-2 border border-slate-200 print:hidden"></td>}
-                                  </>
-                                </tr>
-                              );
-                              // If the squad is not collapsed, render its soldiers
-                              if (!isSquadCollapsed) {
-                                let squadIndexCounter = 0;
-                                soldiersInSquad.forEach(soldier => {
-                                  squadIndexCounter++;
-                                  elements.push(renderSoldierRow(soldier, squadIndexCounter));
-                                });
-                              }
-                            }
-                          });
-                        }
-
-                        return elements;
-                      }).flat()
-                    })()
-                  ) : (
-                    <tr>
-                      <td colSpan={
-                        2 + 1 + // TT, Họ tên
-                        (showEnlistmentColumn ? 1 : 0) +
-                        (showRankColumn ? 1 : 0) +
-                        (showPositionColumn ? 1 : 0) +
-                        (showRemarkColumn ? 1 : 0) +
-                        (showStatusColumn ? 1 : 0) +
-                        (showActionsColumn ? 1 : 0)
-                      } className="p-8 text-center text-slate-400 bg-slate-50">
-                        Không tìm thấy quân nhân nào khớp với từ khóa tìm kiếm.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Total count footer within Roster section */}
-            <div className="flex flex-wrap gap-2 mt-4 print:hidden">
-              <button onClick={() => setShowEnlistmentColumn(!showEnlistmentColumn)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center space-x-1.5">
-                {showEnlistmentColumn ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                <span>Nhập ngũ</span>
-              </button>
-              <button onClick={() => setShowRankColumn(!showRankColumn)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center space-x-1.5">
-                {showRankColumn ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                <span>Cấp bậc</span>
-              </button>
-              <button onClick={() => setShowPositionColumn(!showPositionColumn)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center space-x-1.5">
-                {showPositionColumn ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                <span>Chức vụ</span>
-              </button>
-              <button onClick={() => setShowRemarkColumn(!showRemarkColumn)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center space-x-1.5">
-                {showRemarkColumn ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                <span>Ghi chú</span>
-              </button>
-              <button onClick={() => setShowStatusColumn(!showStatusColumn)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center space-x-1.5">
-                {showStatusColumn ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                <span>Trạng thái</span>
-              </button>
-              <button onClick={() => setShowActionsColumn(!showActionsColumn)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center space-x-1.5">
-                {showActionsColumn ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                <span>Thao tác</span>
-              </button>
-            </div>
-
-            <div className="mt-4 text-xs text-slate-500 font-medium flex justify-between items-center print:hidden">
-              <p>Đang hiển thị {filteredRoster.length} trên tổng số {roster.length} quân nhân biên chế.</p>
-              <p>Mẹo: Nhấp vào nút <Edit2 className="w-3 h-3 inline text-slate-400" /> để thay đổi thông tin, đơn vị hoặc trạng thái quân nhân.</p>
-            </div>
-          </div>
-        </section>
-
-        {/* Section: Danh sách tổng hợp (Detailed Summary) */}
-        <section id="detailed-summary-section" className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden print:border-none print:shadow-none">
-          <div 
-            className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between cursor-pointer hover:bg-slate-800 transition-colors print:bg-slate-100 print:text-black print:border-b"
-            onClick={() => setCollapsedDetailedSummary(!collapsedDetailedSummary)}
-          >
-            <div className="flex items-center space-x-2">
-              <ChevronDown className={`w-5 h-5 text-emerald-400 transition-transform ${collapsedDetailedSummary ? '-rotate-90' : 'rotate-0'}`} />
-              <h2 className="text-lg font-bold uppercase tracking-wide">Danh Sách Tổng Hợp</h2>
-            </div>
-          </div>
-          
-          {!collapsedDetailedSummary && (
-            <div className="p-4 space-y-1">
-              {[
-                { key: 'rank', title: 'Thống kê theo Cấp bậc', data: detailedSummary.rank, icon: Users },
-                { key: 'position', title: 'Thống kê theo Chức vụ', data: detailedSummary.position, icon: UserCheck },
-                { key: 'enlistment', title: 'Thống kê theo Nhập ngũ', data: detailedSummary.enlistment, icon: FileText },
-                { key: 'unit', title: 'Thống kê theo Đơn vị', data: detailedSummary.unit, icon: Users },
-                { key: 'education', title: 'Thống kê theo Văn hóa', data: detailedSummary.education, icon: BookUser },
-                { key: 'ethnicity', title: 'Thống kê theo Dân tộc', data: detailedSummary.ethnicity, icon: Globe },
-                { key: 'dateOfBirth', title: 'Thống kê theo Năm sinh', data: detailedSummary.dateOfBirth, icon: Cake },
-                { key: 'religion', title: 'Thống kê theo Tôn giáo', data: detailedSummary.religion, icon: Users },
-                { key: 'residence', title: 'Thống kê theo Trú quán (Tỉnh)', data: detailedSummary.residence, icon: Globe },
-              ].map(item => (
-                <div key={item.key} className="border border-slate-200 rounded-lg overflow-hidden">
-                  <div
-                    onClick={() => setActiveSummaryAccordion(activeSummaryAccordion === item.key ? null : item.key)}
-                    className="p-3 bg-slate-50 hover:bg-slate-100 cursor-pointer flex items-center space-x-3"
-                  >
-                    <item.icon className="w-4 h-4 text-slate-500" />
-                    <h3 className="text-sm font-semibold text-slate-800">{item.title}</h3>
-                  </div>
-                  <AnimatePresence>
-                    {activeSummaryAccordion === item.key && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="p-3">
-                          <table className="w-full text-sm">
-                            <tbody>
-                              {item.data.length > 0 ? (
-                                item.data.map(([value, count]) => (
-                                  <tr 
-                                    key={value} 
-                                    className="border-b border-slate-200 last:border-b-0"
-                                  >
-                                    <td colSpan={2} className="p-0">
-                                      <table className="w-full">
-                                        <tbody>
-                                          <tr className="hover:bg-slate-100">
-                                            {item.key === 'residence' && typeof count === 'object' && Object.keys(count.districts).length > 0 ? (
-                                              <>
-                                                <td className="py-1.5 px-3 text-slate-700 w-full cursor-pointer" onClick={() => handleSummaryDrillDown(item.key, value, item.title)}>
-                                                  <div className="flex justify-between items-center">
-                                                    <span>{value}</span>
-                                                    <button onClick={(e) => { e.stopPropagation(); toggleProvinceCollapse(value); }} className="p-1 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-200">
-                                                      {expandedProvinces.has(value) ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                                    </button>
-                                                  </div>
-                                                </td>
-                                                <td className="py-1.5 px-3 text-right font-semibold text-slate-800 cursor-pointer" onClick={() => handleSummaryDrillDown(item.key, value, item.title)} >
-                                                  {count.total > 0 ? `${count.total} đ/c` : ''}
-                                                </td>
-                                              </>
-                                            ) : (
-                                              <>
-                                                <td className={`py-1.5 px-3 text-slate-700 cursor-pointer`} onClick={() => handleSummaryDrillDown(item.key, value, item.title)}>
-                                                  {item.key === 'unit' ? (
-                                                    <span className={`${value.startsWith("Trung đội") ? 'font-semibold' : ''} ${value.startsWith("Tiểu đội") ? 'pl-4' : ''}`}>{value}</span>
-                                                  ) : ( value )}
-                                                </td>
-                                                <td className="py-1.5 px-3 text-right font-semibold text-slate-800 cursor-pointer" onClick={() => handleSummaryDrillDown(item.key, value, item.title)}>{typeof count === 'number' ? (count > 0 ? `${count} đ/c` : '') : (count.total > 0 ? `${count.total} đ/c` : '')}</td>
-                                              </>
-                                            )}
-                                          </tr>
-                                          <AnimatePresence>
-                                            {item.key === 'residence' && typeof count === 'object' && count.districts && expandedProvinces.has(value) && (
-                                              <motion.tr
-                                                initial={{ opacity: 0 }}
-                                                animate={{ opacity: 1 }}
-                                                exit={{ opacity: 0 }}
-                                                className="bg-slate-50"
-                                              >
-                                                <td colSpan={2} className="pt-0 pb-1 px-1">
-                                                  <div className="border-t border-slate-200 mx-2">
-                                                    {Object.entries(count.districts).sort(([a], [b]) => a.localeCompare(b)).map(([district, districtCount]) => (
-                                                      <div key={`${value}-${district}`} className="flex justify-between items-center hover:bg-sky-100 cursor-pointer rounded-md px-2 py-1" onClick={() => handleSummaryDrillDown(item.key, `${value}__SUB__${district}`, item.title)}>
-                                                        <span className="pl-6 text-slate-600">{district}</span>
-                                                        <span className="font-medium text-slate-700">{districtCount > 0 ? `${districtCount} đ/c` : ''}</span>
-                                                      </div>
-                                                    ))}
-                                                  </div>
-                                                </td>
-                                              </motion.tr>
-                                            )}
-                                          </AnimatePresence>
-                                        </tbody>
-                                      </table>
-                                    </td>
-                                  </tr>
-                                ))
-                              ) : (
-                                <tr><td colSpan={2} className="text-slate-500 italic py-1.5">Chưa có dữ liệu.</td></tr>
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
+{/* Thống kê quân số*/}
+<Thongkequanso
+  collapsedDetailedSummary={collapsedDetailedSummary}
+  setCollapsedDetailedSummary={setCollapsedDetailedSummary}
+  activeSummaryAccordion={activeSummaryAccordion}
+  setActiveSummaryAccordion={setActiveSummaryAccordion}
+  expandedProvinces={expandedProvinces}
+  toggleProvinceCollapse={toggleProvinceCollapse}
+  handleSummaryDrillDown={handleSummaryDrillDown}
+  detailedSummary={detailedSummary}
+/>
+{/* Thống kê quân số*/}
       </main>
 
       {/* Footer decoration */}

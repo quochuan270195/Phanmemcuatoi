@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { Printer, ArrowLeft, Users, UserCheck, UserX, AlertTriangle, Edit2, Check, X, FileText, Save, Trash2, Eye, Search, ChevronDown } from 'lucide-react';
 import { onSnapshot, doc, setDoc } from "firebase/firestore";
-import { auth, db } from "./firebase";
+import { auth, db } from "../firebase";
 
 // Định nghĩa lại các kiểu dữ liệu cần thiết
 interface Soldier {
@@ -57,8 +57,35 @@ const DutyReportPage: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Pick<Soldier, 'note' | 'remark'> | null>(null);
   const [otherReason, setOtherReason] = useState<string>(""); // State for custom reason
-  const [filterNote, setFilterNote] = useState<string>('all');
+ const [filterNote, setFilterNote] = useState('all');
 
+
+ {/* thêm để định dạng hiện thị qs vắng*/}
+const groupedAbsences = useMemo(() => {
+  // Giả sử roster là danh sách quân nhân, và mỗi quân nhân có { name, note }
+  // Chúng ta sẽ nhóm họ theo note
+  const groups: { [key: string]: number } = {};
+  
+ roster.filter((s: any) => s.note !== 'Có mặt').forEach((s: any) => {
+    // Xử lý chuỗi để bỏ tiền tố "Lý do khác: "
+    let reason = s.note || "Khác";
+    if (reason.startsWith("Lý do khác: ")) {
+      reason = reason.replace("Lý do khác: ", "");
+    }
+    groups[reason] = (groups[reason] || 0) + 1;
+  });
+   
+  return Object.entries(groups);
+}, [roster]);
+{/* thêm để định dạng hiện thị qs vắng*/}
+
+
+
+
+
+
+
+  
   // State for save report modal
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [reportTitle, setReportTitle] = useState("");
@@ -74,6 +101,9 @@ const DutyReportPage: React.FC = () => {
 
   // State for today's reports visibility
   const [isTodaysReportsVisible, setIsTodaysReportsVisible] = useState(false);
+
+  // NEW: State for showing detailed absent list
+  const [showAbsentDetails, setShowAbsentDetails] = useState(false);
 
   const startEdit = (soldier: Soldier) => {
     setEditingId(soldier.id);
@@ -379,17 +409,63 @@ const DutyReportPage: React.FC = () => {
                 <td className="p-3 border border-slate-300 text-center font-medium">3</td>
                 <td className="p-3 border border-slate-300 font-semibold text-amber-800">Vắng mặt</td>
                 <td className="p-3 border border-slate-300 text-center font-bold text-amber-800">{reportToDisplay.absent} đ/c</td>
-                <td className="p-3 border border-slate-300 text-slate-700">
-                  {reportToDisplay.absent > 0 ? (
-                    <div className="flex items-start space-x-1.5">
-                      <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                      <span>{reportToDisplay.notes}</span>
-                    </div>
-                  ) : (
-                    <span className="text-emerald-700 font-semibold">Đơn vị đủ 100% quân số.</span>
-                  )}
-                </td>
+               {/* hiện thị qs vắng*/}
+                                 <td className="p-3 border border-slate-200 text-slate-700 font-medium">
+                {reportToDisplay.absent > 0 ? (
+                  <div className="flex flex-col space-y-1">
+                    {groupedAbsences.map(([reason, count], index) => (
+                      <div key={index} className="flex items-start space-x-1.5">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                        <span className="font-semibold">{reason}:</span>
+                        <span>{count} đồng chí</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-emerald-700 font-semibold">Đơn vị đủ 100% quân số.</span>
+                )}
+              </td>
+               {/* hiện thị qs vắng*/}
+            
               </tr>
+              {reportToDisplay.absent > 0 && (
+                <tr className="bg-amber-50/30">
+                  <td colSpan={4} className="p-0 border border-slate-300">
+                    <div className="p-2">
+                      <button 
+                        onClick={() => setShowAbsentDetails(!showAbsentDetails)}
+                        className="text-sm font-semibold text-amber-800 hover:text-amber-900 flex items-center space-x-1"
+                      >
+                        <ChevronDown className={`w-4 h-4 transition-transform ${showAbsentDetails ? 'rotate-180' : ''}`} />
+                        <span>{showAbsentDetails ? 'Ẩn' : 'Xem'} chi tiết quân số vắng</span>
+                      </button>
+                      {showAbsentDetails && (
+                        <div className="mt-3 pl-2 space-y-3 text-slate-700 text-sm">
+                          {Object.entries(
+                            (viewingReport ? viewingReport.roster : roster)
+                              .filter(s => s.note !== 'Có mặt' && s.note)
+                              .reduce((acc, soldier) => {
+                                const reason = soldier.note.replace('Vắng: ', '').replace('Lý do khác: ', '');
+                                if (!acc[reason]) {
+                                  acc[reason] = [];
+                                }
+                                acc[reason].push(soldier);
+                                return acc;
+                              }, {} as Record<string, Soldier[]>)
+                          ).map(([reason, soldiers]) => (
+                            <div key={reason}>
+                              <p className="font-semibold text-slate-800">{reason} ({soldiers.length} đ/c):</p>
+                              <ul className="list-disc pl-6 mt-1 space-y-1">
+                                {soldiers.map(s => <li key={s.id}>{s.rank} {s.name} - {s.unit}{s.remark ? <span className="italic text-slate-500"> ({s.remark})</span> : ''}</li>)}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
 
