@@ -1,3 +1,4 @@
+
 export interface Soldier {
   id: string;
   name: string;

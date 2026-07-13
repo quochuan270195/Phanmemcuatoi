@@ -26,7 +26,7 @@ const NOTES_PRESETS = [
   { value: "Tăng cường", label: "Vắng: Tăng cường" }
 ];
 
-const RosterList = ({ 
+const Danhsachbienche = ({ 
   // Truyền các props cần thiết tại đây
   filteredRoster, searchTerm, setSearchTerm, roster,
   isAdding, setIsAdding, handleAddSoldier,
@@ -45,6 +45,9 @@ const RosterList = ({
 
 
 
+
+
+  
 
 
 
@@ -774,4 +777,4 @@ const RosterList = ({
   );
 };
 
-export default RosterList;
+export default Danhsachbienche;

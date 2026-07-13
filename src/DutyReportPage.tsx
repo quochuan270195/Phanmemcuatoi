@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { Printer, ArrowLeft, Users, UserCheck, UserX, AlertTriangle, Edit2, Check, X, FileText, Save, Trash2, Eye, Search, ChevronDown } from 'lucide-react';
 import { onSnapshot, doc, setDoc } from "firebase/firestore";
-import { auth, db } from "../firebase";
+import { auth, db } from "./firebase";
 
 // Định nghĩa lại các kiểu dữ liệu cần thiết
 interface Soldier {
@@ -57,35 +57,8 @@ const DutyReportPage: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Pick<Soldier, 'note' | 'remark'> | null>(null);
   const [otherReason, setOtherReason] = useState<string>(""); // State for custom reason
- const [filterNote, setFilterNote] = useState('all');
+  const [filterNote, setFilterNote] = useState<string>('all');
 
-
- {/* thêm để định dạng hiện thị qs vắng*/}
-const groupedAbsences = useMemo(() => {
-  // Giả sử roster là danh sách quân nhân, và mỗi quân nhân có { name, note }
-  // Chúng ta sẽ nhóm họ theo note
-  const groups: { [key: string]: number } = {};
-  
- roster.filter((s: any) => s.note !== 'Có mặt').forEach((s: any) => {
-    // Xử lý chuỗi để bỏ tiền tố "Lý do khác: "
-    let reason = s.note || "Khác";
-    if (reason.startsWith("Lý do khác: ")) {
-      reason = reason.replace("Lý do khác: ", "");
-    }
-    groups[reason] = (groups[reason] || 0) + 1;
-  });
-   
-  return Object.entries(groups);
-}, [roster]);
-{/* thêm để định dạng hiện thị qs vắng*/}
-
-
-
-
-
-
-
-  
   // State for save report modal
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [reportTitle, setReportTitle] = useState("");
@@ -102,7 +75,7 @@ const groupedAbsences = useMemo(() => {
   // State for today's reports visibility
   const [isTodaysReportsVisible, setIsTodaysReportsVisible] = useState(false);
 
-  // NEW: State for showing detailed absent list
+  // State để quản lý việc hiển thị chi tiết quân số vắng
   const [showAbsentDetails, setShowAbsentDetails] = useState(false);
 
   const startEdit = (soldier: Soldier) => {
@@ -194,6 +167,26 @@ const groupedAbsences = useMemo(() => {
   // Khi xem báo cáo đã lưu, reportToDisplay sẽ là dữ liệu của báo cáo đó.
   // Nếu không, nó sẽ là dữ liệu trực tiếp.
   const reportToDisplay = useMemo(() => viewingReport ? calculateSummary(viewingReport.roster) : calculateSummary(roster), [roster, viewingReport]);
+
+  // Dữ liệu roster để hiển thị trong bảng chi tiết (live hoặc historical)
+  const rosterForDetails = useMemo(() => viewingReport ? viewingReport.roster : roster, [roster, viewingReport]);
+
+  // Nhóm các lý do vắng mặt để hiển thị trong bảng tổng hợp
+  const groupedAbsences = useMemo(() => {
+    const rosterData = viewingReport ? viewingReport.roster : roster;
+    const groups: { [key: string]: number } = {};
+    
+    rosterData.filter((s: Soldier) => s.note !== 'Có mặt' && s.note).forEach((s: Soldier) => {
+      let reason = s.note || "Lý do khác";
+      // Chuẩn hóa lý do để nhóm tốt hơn
+      if (reason.startsWith("Vắng: ") || reason.startsWith("Lý do khác: ")) {
+        reason = reason.substring(reason.indexOf(":") + 2);
+      }
+      groups[reason] = (groups[reason] || 0) + 1;
+    });
+     
+    return Object.entries(groups);
+  }, [roster, viewingReport]);
 
   const handlePrint = () => {
     window.print();
@@ -314,7 +307,7 @@ const groupedAbsences = useMemo(() => {
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 sm:p-8 print:p-0">
-      <div className="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-lg print:shadow-none print:rounded-none print:p-2">
+      <div className="bg-white p-8 rounded-lg shadow-lg print:shadow-none print:rounded-none print:p-2">
         <div className="flex justify-between items-center mb-8 print:mb-4">
           <div className="text-center flex-grow">
             <h1 className="text-2xl font-bold text-slate-800">BÁO CÁO QUÂN SỐ</h1>
@@ -409,63 +402,43 @@ const groupedAbsences = useMemo(() => {
                 <td className="p-3 border border-slate-300 text-center font-medium">3</td>
                 <td className="p-3 border border-slate-300 font-semibold text-amber-800">Vắng mặt</td>
                 <td className="p-3 border border-slate-300 text-center font-bold text-amber-800">{reportToDisplay.absent} đ/c</td>
-               {/* hiện thị qs vắng*/}
-                                 <td className="p-3 border border-slate-200 text-slate-700 font-medium">
-                {reportToDisplay.absent > 0 ? (
-                  <div className="flex flex-col space-y-1">
-                    {groupedAbsences.map(([reason, count], index) => (
-                      <div key={index} className="flex items-start space-x-1.5">
-                        <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                        <span className="font-semibold">{reason}:</span>
-                        <span>{count} đồng chí</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <span className="text-emerald-700 font-semibold">Đơn vị đủ 100% quân số.</span>
-                )}
-              </td>
-               {/* hiện thị qs vắng*/}
-            
+                <td className="p-3 border border-slate-300 text-slate-700">
+                  {reportToDisplay.absent > 0 ? (
+                    <div className="flex flex-col space-y-1">
+                      {groupedAbsences.map(([reason, count], index) => (
+                        <div key={index} className="flex items-start space-x-1.5">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                          <span className="font-semibold">{reason}:</span>
+                          <span>{count} đồng chí</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-emerald-700 font-semibold">Đơn vị đủ 100% quân số.</span>
+                  )}
+                </td>
               </tr>
+              {/* Dòng chi tiết quân số vắng có thể thu gọn */}
               {reportToDisplay.absent > 0 && (
-                <tr className="bg-amber-50/30">
-                  <td colSpan={4} className="p-0 border border-slate-300">
+                <tr className="bg-amber-50/20 print:hidden">
+                  <td colSpan={4} className="p-0 border border-slate-200">
                     <div className="p-2">
                       <button 
                         onClick={() => setShowAbsentDetails(!showAbsentDetails)}
-                        className="text-sm font-semibold text-amber-800 hover:text-amber-900 flex items-center space-x-1"
+                        className="text-xs font-semibold text-amber-800 hover:text-amber-900 flex items-center space-x-1"
                       >
-                        <ChevronDown className={`w-4 h-4 transition-transform ${showAbsentDetails ? 'rotate-180' : ''}`} />
+                        {showAbsentDetails ? <Eye className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                         <span>{showAbsentDetails ? 'Ẩn' : 'Xem'} chi tiết quân số vắng</span>
                       </button>
                       {showAbsentDetails && (
-                        <div className="mt-3 pl-2 space-y-3 text-slate-700 text-sm">
-                          {Object.entries(
-                            (viewingReport ? viewingReport.roster : roster)
-                              .filter(s => s.note !== 'Có mặt' && s.note)
-                              .reduce((acc, soldier) => {
-                                const reason = soldier.note.replace('Vắng: ', '').replace('Lý do khác: ', '');
-                                if (!acc[reason]) {
-                                  acc[reason] = [];
-                                }
-                                acc[reason].push(soldier);
-                                return acc;
-                              }, {} as Record<string, Soldier[]>)
-                          ).map(([reason, soldiers]) => (
-                            <div key={reason}>
-                              <p className="font-semibold text-slate-800">{reason} ({soldiers.length} đ/c):</p>
-                              <ul className="list-disc pl-6 mt-1 space-y-1">
-                                {soldiers.map(s => <li key={s.id}>{s.rank} {s.name} - {s.unit}{s.remark ? <span className="italic text-slate-500"> ({s.remark})</span> : ''}</li>)}
-                              </ul>
-                            </div>
-                          ))}
+                        <div className="mt-3 pl-2 space-y-3 text-slate-700 text-xs">
+                          <AbsenteeDetails roster={rosterForDetails} />
                         </div>
                       )}
                     </div>
                   </td>
-                </tr>
-              )}
+              </tr>
+                )}
             </tbody>
           </table>
 
@@ -561,15 +534,15 @@ const groupedAbsences = useMemo(() => {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse border border-slate-300 font-vietnamese-serif">
-            <thead className="bg-slate-100 text-slate-700 font-bold">
+            <thead className="bg-slate-100 text-slate-700 font-bold whitespace-nowrap">
               <tr>
                 <th className="p-3 border border-slate-300 text-center w-16">STT</th>
-                <th className="p-3 border border-slate-300">Họ và tên</th>
-                <th className="p-3 border border-slate-300">Đơn vị</th>
+                <th className="p-3 border border-slate-300 text-center">Họ và tên</th>
+                <th className="p-3 border border-slate-300 text-center">Đơn vị</th>
                 <th className="p-3 border border-slate-300 text-center">Cấp bậc</th>
-                <th className="p-3 border border-slate-300">Chức vụ</th>
-                <th className="p-3 border border-slate-300">Trạng thái</th>
-                <th className="p-3 border border-slate-300">Ghi chú chi tiết</th>
+                <th className="p-3 border border-slate-300 text-center">Chức vụ</th>
+                <th className="p-3 border border-slate-300 min-w-[200px] text-center">Trạng thái</th>
+                <th className="p-3 border border-slate-300 min-w-[200px] text-center">Ghi chú chi tiết</th>
                 <th className="p-3 border border-slate-300 w-24 text-center print:hidden">Thao tác</th>
               </tr>
             </thead>
@@ -577,12 +550,12 @@ const groupedAbsences = useMemo(() => {
               {filteredRoster.length > 0 ? (
                 filteredRoster.map((soldier, index) => (
                   <tr key={soldier.id} className="hover:bg-slate-50">
-                    <td className="p-2 border border-slate-300 text-center font-mono">{index + 1}</td>
-                    <td className="p-2 border border-slate-300 font-medium">{soldier.name}</td>
-                    <td className="p-2 border border-slate-300">{soldier.unit}</td>
-                    <td className="p-2 border border-slate-300 text-center">{soldier.rank}</td>
-                    <td className="p-2 border border-slate-300">{soldier.position}</td>
-                    <td className="p-2 border border-slate-300 text-center align-middle">
+                    <td className="p-2 border border-slate-300 text-center font-mono whitespace-nowrap">{index + 1}</td>
+                    <td className="p-2 border border-slate-300 font-medium whitespace-nowrap">{soldier.name}</td>
+                    <td className="p-2 border border-slate-300 text-center whitespace-nowrap">{soldier.unit}</td>
+                    <td className="p-2 border border-slate-300 text-center whitespace-nowrap">{soldier.rank}</td>
+                    <td className="p-2 border border-slate-300 text-center whitespace-nowrap">{soldier.position}</td>
+                    <td className="p-2 border border-slate-300 text-center align-middle whitespace-nowrap">
                       {editingId === soldier.id ? (
                         <>
                           <select
@@ -612,7 +585,7 @@ const groupedAbsences = useMemo(() => {
                         </span>
                       )}
                     </td>
-                    <td className="p-2 border border-slate-300 align-middle">
+                    <td className="p-2 border border-slate-300 align-middle whitespace-nowrap">
                       {editingId === soldier.id ? (
                         <input
                           type="text"
@@ -625,7 +598,7 @@ const groupedAbsences = useMemo(() => {
                         <span>{soldier.remark}</span>
                       )}
                     </td>
-                    <td className="p-2 border border-slate-300 text-center print:hidden">
+                    <td className="p-2 border border-slate-300 text-center print:hidden whitespace-nowrap">
                       {editingId === soldier.id && !viewingReport ? (
                         <div className="flex items-center justify-center space-x-1">
                           <button onClick={saveEdit} className="p-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded transition" title="Lưu"><Check className="w-4 h-4" /></button>
@@ -682,3 +655,30 @@ const ReportListItem: React.FC<ReportListItemProps> = ({ report, onView, onDelet
       </div>
   </li>
 );
+
+// Component con để hiển thị chi tiết quân số vắng
+const AbsenteeDetails: React.FC<{ roster: Soldier[] }> = ({ roster }) => {
+  const absenteeGroups = useMemo(() => {
+    return roster
+      .filter((s: Soldier) => s.note !== 'Có mặt' && s.note)
+      .reduce((acc: { [key: string]: Soldier[] }, soldier: Soldier) => {
+        const reason = soldier.note.startsWith("Vắng: ") ? soldier.note.substring(6) : soldier.note;
+        if (!acc[reason]) acc[reason] = [];
+        acc[reason].push(soldier);
+        return acc;
+      }, {});
+  }, [roster]);
+
+  return (
+    <>
+      {Object.entries(absenteeGroups).map(([reason, soldiers]) => (
+        <div key={reason}>
+          <p className="font-semibold text-slate-800">{reason} ({soldiers.length} đ/c):</p>
+          <ul className="list-disc pl-6 mt-1 space-y-1">
+            {soldiers.map((s: Soldier) => <li key={s.id}>{s.rank} {s.name} - {s.unit}{s.remark ? <span className="italic text-slate-500"> ({s.remark})</span> : ''}</li>)}
+          </ul>
+        </div>
+      ))}
+    </>
+  );
+};

@@ -96,7 +96,6 @@ interface DailyReport {
 
 
 
-
 // Pre-defined values requested
 const RANKS = ["1//", "4/", "3/", "2/", "1/", "H3", "H2", "H1", "B1", "B2"];
 const POSITIONS = ["Đại đội trưởng", "Chính trị viên", "Phó Đại đội trưởng", "Trung đội trưởng", "Tiểu đội trưởng", "Nhân viên Quân y", "Nhân viên Quản lý", "Liên lạc", "Chiến sĩ"];
@@ -133,7 +132,6 @@ export default function DashboardPage({ user, onLogout }: DashboardPageProps) {
   const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
 
 const dangCapNhatTuMang = useRef(false); // Cờ hiệu ngầm đánh dấu nguồn dữ liệu
-
 
 
 
@@ -1486,14 +1484,7 @@ const [isDirty, setIsDirty] = useState(false);
   setSearchTerm={setSearchTerm}
   filterNote={filterNote}
   setFilterNote={setFilterNote}
-
-
-
-
-
-
-
-  // State cho Form & Editing
+   // State cho Form & Editing
   newForm={newForm}
   setNewForm={setNewForm}
   editForm={editForm}
@@ -1509,6 +1500,22 @@ const [isDirty, setIsDirty] = useState(false);
   showRemarkColumn={showRemarkColumn}
   showStatusColumn={showStatusColumn}
   showActionsColumn={showActionsColumn}
+  // Hàm để hiện ẩn các cột
+  setShowActionsColumn={setShowActionsColumn}
+ setShowEnlistmentColumn={setShowEnlistmentColumn}
+ setShowRankColumn={setShowRankColumn}
+ setShowPositionColumn={setShowPositionColumn}
+ setShowRemarkColumn={setShowRemarkColumn}
+ setShowStatusColumn={setShowStatusColumn}
+
+
+
+
+
+
+
+
+
   
   // Các hàm chức năng
   handleAddSoldier={handleAddSoldier}
