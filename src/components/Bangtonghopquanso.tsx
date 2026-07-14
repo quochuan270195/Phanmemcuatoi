@@ -15,7 +15,7 @@ const Bangtonghopquanso = ({
   historySearchDate, 
   setHistorySearchDate, 
   setSearchedReport, 
-  searchedReport, 
+  searchedReport,
   handleDeleteReport, // Thêm prop này từ DashboardPage
 }: any) => {
 
