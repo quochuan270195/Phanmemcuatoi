@@ -10,7 +10,8 @@ import {
   FileText, 
   Printer, 
   Search, 
-  Users, 
+  Users,
+  UploadCloud, 
   CheckCircle, 
   AlertTriangle,
   UserCheck,
@@ -35,8 +36,8 @@ import * as XLSX from 'xlsx';
 import { Upload, FilePlus, Replace, FileDiff } from "lucide-react";
 
 import { Link } from 'react-router-dom';
-import { onSnapshot, doc } from "firebase/firestore"; // Lấy từ thư viện gốc
-import { auth, db, taiDuLieuTuDamMay, dongBoLenDamMay } from "./firebase";
+import { onSnapshot, doc } from "firebase/firestore";
+import { auth, db, dongBoLenDamMay, uploadFileAndGetURL } from "./firebase";
 import HeaderDashboard from "./components/HeaderDashboard";
 import Bangtonghopquanso from "./components/Bangtonghopquanso";
 import Danhsachbienche from "./components/Danhsachbienche";
@@ -73,6 +74,7 @@ interface Soldier {
   contactPhone?: string;
   rankReceivedDate?: string; // Ngày nhận cấp bậc
   positionReceivedDate?: string; // Ngày nhận chức vụ
+  avatarUrl?: string; // Thêm trường để lưu URL ảnh đại diện
 }
 
 interface User {
@@ -91,6 +93,7 @@ interface DailyReport {
   present: number;
   absent: number;
   notes: string;
+  roster: Soldier[];
 }
 
 
@@ -131,15 +134,6 @@ export default function DashboardPage({ user, onLogout }: DashboardPageProps) {
   const [roster, setRoster] = useState<Soldier[]>(INITIAL_ROSTER);
   const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
 
-const dangCapNhatTuMang = useRef(false); // Cờ hiệu ngầm đánh dấu nguồn dữ liệu
-
-
-
-useEffect(() => {
-// 🔥 THÊM 2 DÒNG NÀY VÀO: Ép app tự xóa sạch bộ nhớ đệm cũ khi vừa mở trang
-    localStorage.removeItem('militaryRoster');
-    localStorage.removeItem('dailyReports');
-
     let unsubscribe: (() => void) | undefined;
 
  const batLuanNgheRealtime = async () => {
@@ -149,27 +143,37 @@ useEffect(() => {
         console.log("Đang bật tính năng đồng bộ thời gian thực cho:", emailHienTai);
         
         unsubscribe = onSnapshot(doc(db, "baocao_quanso", emailHienTai), (docSnap) => {
+          // 🎯 GIẢI PHÁP TRIỆT ĐỂ: Kiểm tra xem thay đổi có phải từ chính client này không.
+          // Nếu có (hasPendingWrites = true), ta bỏ qua để không ghi đè dữ liệu mới nhất trên UI.
+          if (docSnap.metadata.hasPendingWrites) {
+            console.log("Bỏ qua cập nhật cục bộ (local change).");
+            return;
+          }
+
           if (docSnap.exists()) {
             const tongDuLieu = docSnap.data().duLieu;
             
             if (tongDuLieu) {
-              // 🚩 Bật cờ: Báo cho App biết dữ liệu này là do MẠNG ĐANG ĐỔ XUỐNG, không phải do người dùng gõ
-              dangCapNhatTuMang.current = true; 
-
+              // Chỉ cập nhật state khi dữ liệu đến từ server (không phải từ chính client này)
               if (tongDuLieu.roster) setRoster(tongDuLieu.roster);
               if (tongDuLieu.dailyReports) setDailyReports(tongDuLieu.dailyReports);
-              if (tongDuLieu.searchTerm) setSearchTerm(tongDuLieu.searchTerm);
-              if (tongDuLieu.filterNote) setFilterNote(tongDuLieu.filterNote);
-              if (tongDuLieu.editingId) setEditingId(tongDuLieu.editingId);
-              if (tongDuLieu.editForm) setEditForm(tongDuLieu.editForm);
               
-              console.log("⚡ Đã tải và đồng bộ dữ liệu mới nhất từ mạng xuống!");
+              // Không đồng bộ các state giao diện như filter, editingId, editForm
+              // vì chúng chỉ nên được quản lý cục bộ tại client, tránh xung đột.
+              // if (tongDuLieu.filterNote) setFilterNote(tongDuLieu.filterNote);
+
+              console.log("⚡ Đã nhận và đồng bộ dữ liệu từ server (từ một client khác)!");
             }
           }
           setIsLoaded(true); 
         });
       }
     };
+
+useEffect(() => {
+// 🔥 Xóa sạch bộ nhớ đệm cũ khi vừa mở trang để đảm bảo dữ liệu mới nhất từ Firebase được nạp
+    localStorage.removeItem('militaryRoster');
+    localStorage.removeItem('dailyReports');
 
     batLuanNgheRealtime();
 
@@ -238,6 +242,7 @@ const toggleProvinceCollapse = (province: string) => {
 
 
 
+
 const [isLoaded, setIsLoaded] = useState(false); // Ban đầu chưa tải xong dữ liệu từ mạng về
 
 
@@ -278,6 +283,7 @@ const [isLoaded, setIsLoaded] = useState(false); // Ban đầu chưa tải xong 
     contactPhone: "",
     rankReceivedDate: "",
     positionReceivedDate: "",
+    avatarUrl: "", // Thêm trường ảnh
   });
 
   // State for Toast Notifications
@@ -310,6 +316,9 @@ const [isLoaded, setIsLoaded] = useState(false); // Ban đầu chưa tải xong 
   // State for editing within the soldier detail modal
   const [isModalEditing, setIsModalEditing] = useState(false);
 
+  // State for "Other reason" when editing inline
+  const [otherReason, setOtherReason] = useState<string>("");
+
   // State for collapsible summary sections
   const [collapsedSummarySections, setCollapsedSummarySections] = useState<Set<string>>(new Set(['BCHc', 'cBo', 'bBV1', 'bBV2']));
 
@@ -328,13 +337,13 @@ const [isLoaded, setIsLoaded] = useState(false); // Ban đầu chưa tải xong 
   // State for user menu dropdown
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
+  // State for avatar upload
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
   // State for searching historical daily reports
   const [historySearchDate, setHistorySearchDate] = useState<string>('');
   const [searchedReport, setSearchedReport] = useState<DailyReport | null>(null);
-
-
-const [isDirty, setIsDirty] = useState(false);
-
 
 
   // NEW: Toggle collapse state for a province
@@ -351,22 +360,11 @@ const [isDirty, setIsDirty] = useState(false);
   };
 
 
-  // --- Data Persistence ---
-  // Save roster to localStorage whenever it changes
-  useEffect(() => {
-
-  }, [roster]);
-
-  // Save daily reports to localStorage whenever they change
-  useEffect(() => {
-
-  }, [dailyReports]);
-
   // --- Auto-save last day's report ---
   useEffect(() => {
     const todayStr = new Date().toLocaleDateString('en-CA');
-    const savedReports = localStorage.getItem('dailyReports');
-    const reports = savedReports ? JSON.parse(savedReports) : [];
+    // Không dùng localStorage nữa, dùng trực tiếp state dailyReports
+    const reports = dailyReports; 
 
     if (reports.length > 0) {
       const lastReportDateStr = reports[0].date;
@@ -376,13 +374,14 @@ const [isDirty, setIsDirty] = useState(false);
         const reportExists = reports.some((r: DailyReport) => r.date === lastReportDateStr);
 
         if (!reportExists) {
-          const savedRoster = localStorage.getItem('militaryRoster');
-          const lastRoster = savedRoster ? JSON.parse(savedRoster) : [];
+          // Lấy roster từ state hiện tại, giả định nó là của ngày cuối cùng
+          const lastRoster = roster; 
           const lastDaySummary = calculateSummary(lastRoster);
 
           const lastDayReport: DailyReport = {
             date: lastReportDateStr,
-            ...lastDaySummary
+            ...lastDaySummary,
+            roster: lastRoster
           };
           const updatedReports = [lastDayReport, ...reports].sort((a, b) => b.date.localeCompare(a.date));
           setDailyReports(updatedReports);
@@ -391,48 +390,27 @@ const [isDirty, setIsDirty] = useState(false);
       }
     }
   // This effect should only run once on component mount to check for the day change.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isLoaded]);
 
 
 
-// --- ĐOẠN CODE ĐỒNG BỘ LÊN ĐÁM MÂY (BƯỚC 3 CẬP NHẬT) ---
-  const dongBoDuLieuToanDien = async () => {
+// --- HÀM ĐỒNG BỘ DỮ LIỆU LÊN ĐÁM MÂY (TRUNG TÂM) ---
+  const dongBoDuLieuToanDien = async (dataToSync: { roster?: Soldier[], dailyReports?: DailyReport[] }) => {
     const emailHienTai = auth.currentUser?.email;
-
+  
     if (!emailHienTai) {
       console.log("Hệ thống chưa nhận diện được tài khoản đăng nhập.");
-      return; 
+      return;
     }
 
     try {
       console.log("Đang tiến hành đồng bộ tất cả dữ liệu lên Firebase cho:", emailHienTai);
-      // Gom tất cả các state cần lưu vào một object.
-      // Quan trọng: Phải đảm bảo gửi cả những dữ liệu không thuộc trang này (ví dụ dutyReports)
-      // để không bị ghi đè mất khi dùng { merge: true }
-      await dongBoLenDamMay(emailHienTai, {
-        roster: roster,
-        dailyReports: dailyReports,
-        // Thêm các state khác nếu có...
-      });
-      
-      console.log("⚡ Đã đồng bộ toàn bộ dữ liệu ngầm thành công!");
+      await dongBoLenDamMay(emailHienTai, dataToSync);
+      triggerToast("Đã tự động đồng bộ dữ liệu.", "info");
     } catch (error) {
       console.error("Lỗi đồng bộ đám mây:", error);
     }
   };
-// TỰ ĐỘNG NHẬN DIỆN MỌI SỬA ĐỔI (Thêm ngày sinh, sửa tên, đổi số vắng...)
-  useEffect(() => {
-  // Nếu chưa tải xong HOẶC không có gì thay đổi (isDirty = false) -> Thoát luôn
-  if (!isLoaded || !isDirty) return; 
-
-  const syncTimer = setTimeout(async () => {
-    await dongBoDuLieuToanDien();
-    setIsDirty(false); // Đặt lại về false sau khi lưu xong
-  }, 1500);
-
-  return () => clearTimeout(syncTimer);
-}, [isDirty, roster, dailyReports, searchTerm, filterNote, isLoaded]);
 
 
 
@@ -476,6 +454,13 @@ const [isDirty, setIsDirty] = useState(false);
   const startEdit = (soldier: Soldier) => {
     setEditingId(soldier.id);
     setEditForm({ ...soldier });
+    // Xử lý khi bắt đầu sửa trạng thái "Lý do khác"
+    if (soldier.note.startsWith("Lý do khác: ")) {
+      setOtherReason(soldier.note.substring("Lý do khác: ".length));
+      setEditForm(prev => prev ? { ...prev, note: "Lý do khác" } : null);
+    } else {
+      setOtherReason("");
+    }
   };
 
   const cancelEdit = () => {
@@ -483,30 +468,53 @@ const [isDirty, setIsDirty] = useState(false);
     setEditForm(null);
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editForm) return;
     if (!editForm.name.trim()) {
       triggerToast("Họ và tên không được để trống!", "info");
       return;
     }
-    const updatedRoster = roster.map(s => s.id === editForm.id ? editForm : s);
+
+    let finalForm = { ...editForm }; // Bắt đầu với form hiện tại
+
+    // Xử lý logic cho "Lý do khác"
+    if (editForm.note === "Lý do khác") {
+      finalForm.note = otherReason.trim() ? `Lý do khác: ${otherReason.trim()}` : "Lý do khác";
+    }
+
+    // Nếu có file ảnh mới được chọn, tải nó lên trước
+    if (avatarFile && user.email) {
+      try {
+        const filePath = `avatars/${user.email}/${editForm.id}_${Date.now()}`;
+        const downloadURL = await uploadFileAndGetURL(avatarFile, filePath);
+        finalForm.avatarUrl = downloadURL; // Cập nhật URL ảnh mới
+      } catch (error) {
+        console.error("Lỗi tải ảnh đại diện:", error);
+        triggerToast("Không thể tải lên ảnh đại diện.", "info");
+        return; // Dừng lại nếu tải ảnh lỗi
+      }
+    }
+
+    const updatedRoster = roster.map(s => s.id === finalForm.id ? finalForm : s);
     setRoster(updatedRoster);
+    dongBoDuLieuToanDien({ roster: updatedRoster }); // ĐỒNG BỘ NGAY LẬP TỨC
 
     // If editing was done via modal, update the viewing soldier state as well
-    if (viewingSoldier && viewingSoldier.id === editForm.id) {
-      setViewingSoldier(editForm);
+    if (viewingSoldier && viewingSoldier.id === finalForm.id) {
+      setViewingSoldier(finalForm); // Sửa ở đây: Dùng finalForm thay vì editForm
     }
 
     setEditingId(null);
     setEditForm(null);
     setIsModalEditing(false); // Ensure modal edit mode is turned off
-    triggerToast(`Đã cập nhật thông tin quân nhân: ${editForm.name}`);
-    setIsDirty(true); // Kích hoạt tự động đồng bộ
+    setAvatarFile(null); // Reset file và preview
+    setAvatarPreview(null);
+    setOtherReason(""); // Reset otherReason
   };
 
 
   // Handle Add Action
-  const handleAddSoldier = () => {
+  const handleAddSoldier = async () => {
     if (!newForm.name.trim()) {
       triggerToast("Vui lòng nhập họ và tên!", "info");
       return;
@@ -541,9 +549,12 @@ const [isDirty, setIsDirty] = useState(false);
       contactPhone: newForm.contactPhone,
       rankReceivedDate: newForm.rankReceivedDate,
       positionReceivedDate: newForm.positionReceivedDate,
+      avatarUrl: newForm.avatarUrl,
     };
 
-    setRoster([...roster, addedSoldier]);
+    const updatedRoster = [...roster, addedSoldier];
+    setRoster(updatedRoster);
+    dongBoDuLieuToanDien({ roster: updatedRoster }); // ĐỒNG BỘ NGAY LẬP TỨC
     setIsAdding(false);
     setNewForm({
       name: "",
@@ -570,17 +581,16 @@ const [isDirty, setIsDirty] = useState(false);
       contactPhone: "",
       rankReceivedDate: "",
       positionReceivedDate: "",
+      avatarUrl: "",
     });
-    triggerToast(`Đã thêm mới quân nhân: ${addedSoldier.name}`);
-    setIsDirty(true); // Kích hoạt tự động đồng bộ
   };
 
   // Handle Delete Action
-  const handleDelete = (id: string, name: string) => {
+  const handleDelete = async(id: string, name: string) => {
     if (confirm(`Bạn có chắc chắn muốn xóa quân nhân "${name}" khỏi biên chế?`)) {
-      setRoster(roster.filter(s => s.id !== id));
-      triggerToast(`Đã xóa quân nhân: ${name}`, "info");
-      setIsDirty(true); // Kích hoạt tự động đồng bộ
+      const updatedRoster = roster.filter(s => s.id !== id);
+      setRoster(updatedRoster);
+      dongBoDuLieuToanDien({ roster: updatedRoster }); // ĐỒNG BỘ NGAY LẬP TỨC
     }
   };
 
@@ -678,6 +688,7 @@ const [isDirty, setIsDirty] = useState(false);
           const contactPhone = String(findKey(row, ["SĐT liên hệ", "phone", "contactphone"]) || "").trim();
           const rankReceivedDate = String(findKey(row, ["ngày nhận cấp bậc", "rankreceiveddate"]) || "").trim();
           const positionReceivedDate = String(findKey(row, ["ngày nhận chức vụ", "positionreceiveddate"]) || "").trim();
+          const avatarUrl = String(findKey(row, ["ảnh đại diện", "avatar", "avatarurl"]) || "").trim();
 
           if (!name || !rank || !position || !unit) {
             skippedRows.push({ row: index + 2, reason: "Thiếu thông tin bắt buộc (Họ tên, Cấp bậc, Chức vụ, hoặc Đơn vị)." });
@@ -711,6 +722,7 @@ const [isDirty, setIsDirty] = useState(false);
             contactPhone,
             rankReceivedDate,
             positionReceivedDate,
+            avatarUrl,
           };
           newSoldiers.push(newSoldier);
         });
@@ -724,23 +736,24 @@ const [isDirty, setIsDirty] = useState(false);
           
           if (trulyNewSoldiers.length > 0) {
             setRoster(prevRoster => [...prevRoster, ...trulyNewSoldiers]);
-              setIsDirty(true);// Kích hoạt tự đồng bộ          
+            dongBoDuLieuToanDien({ roster: [...roster, ...trulyNewSoldiers] }); // ĐỒNG BỘ
             feedbackMessage = `Đã bổ sung chọn lọc ${trulyNewSoldiers.length} quân nhân mới. `;
             const duplicateCount = newSoldiers.length - trulyNewSoldiers.length;
             if (duplicateCount > 0) {
               feedbackMessage += `${duplicateCount} quân nhân đã tồn tại và được bỏ qua.`;
-            }  setIsDirty(true);// Kích hoạt tự đồng bộ
+            }
           } else if (newSoldiers.length > 0) {
             feedbackMessage = "Tất cả quân nhân trong file đã có trong danh sách. Không có gì được thêm.";
           }
         } else if (newSoldiers.length > 0) { // Append or Replace
           if (mode === 'replace') {
             setRoster(newSoldiers);
+            dongBoDuLieuToanDien({ roster: newSoldiers }); // ĐỒNG BỘ
           } else { // append
             setRoster(prevRoster => [...prevRoster, ...newSoldiers]);
+            dongBoDuLieuToanDien({ roster: [...roster, ...newSoldiers] }); // ĐỒNG BỘ
           }
-            setIsDirty(true);// Kích hoạt tự đồng bộ
-
+          
           feedbackMessage = `Đã nhập thành công ${newSoldiers.length} quân nhân. `;
         }
 
@@ -771,7 +784,8 @@ const [isDirty, setIsDirty] = useState(false);
 
     const reportData: DailyReport = {
       date: today,
-      ...summaryReport
+      ...summaryReport,
+      roster: roster // Thêm roster hiện tại vào báo cáo
     };
     
     if (existingReportIndex !== -1) {
@@ -779,13 +793,23 @@ const [isDirty, setIsDirty] = useState(false);
         const updatedReports = [...dailyReports];
         updatedReports[existingReportIndex] = reportData;
         setDailyReports(updatedReports);
-        setIsDirty(true); // Kích hoạt tự động đồng bộ
-        triggerToast("Đã cập nhật báo cáo ngày hôm nay.");
+        dongBoDuLieuToanDien({ dailyReports: updatedReports }); // ĐỒNG BỘ
       }
     } else {
-      setDailyReports(prev => [reportData, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
-      setIsDirty(true); // Kích hoạt tự động đồng bộ khi tạo báo cáo mới
-      triggerToast("Đã lưu báo cáo ngày hôm nay.");
+      // 💡 SỬA LỖI: Tạo mảng mới trước, sau đó dùng nó cho cả set state và đồng bộ.
+      const updatedReports = [reportData, ...dailyReports].sort((a, b) => b.date.localeCompare(a.date));
+      setDailyReports(updatedReports);
+      dongBoDuLieuToanDien({ dailyReports: updatedReports }); // ĐỒNG BỘ
+    }
+  };
+
+  // Handle Delete Daily Report Action
+  const handleDeleteReport = (date: string) => {
+    if (confirm(`Bạn có chắc chắn muốn xóa báo cáo ngày ${new Date(date + 'T00:00:00').toLocaleDateString('vi-VN')}?`)) {
+      const updatedReports = dailyReports.filter(r => r.date !== date);
+      setDailyReports(updatedReports);
+      dongBoDuLieuToanDien({ dailyReports: updatedReports }); // ĐỒNG BỘ
+      if (viewingReport?.date === date) setViewingReport(null); // Quay về xem trực tiếp nếu đang xem báo cáo bị xóa
     }
   };
 
@@ -812,7 +836,7 @@ const [isDirty, setIsDirty] = useState(false);
     const total = rosterData.length;
 
     // "Diện mặt" is those whose note is "Có mặt" or empty (we treat empty as present)
-    const presentCount = roster.filter(s => s.note === "Có mặt" || !s.note).length;
+    const presentCount = rosterData.filter(s => s.note === "Có mặt" || !s.note).length;
     const absentCount = total - presentCount;
 
     // Helper function to get unit abbreviation
@@ -834,7 +858,7 @@ const [isDirty, setIsDirty] = useState(false);
 
     // Detailed breakdown of absent military personnel grouped by category
     const absentDetails: { [key: string]: string[] } = {};
-    roster.forEach(s => {
+    rosterData.forEach(s => {
       if (s.note && s.note !== "Có mặt") {
         if (!absentDetails[s.note]) {
           absentDetails[s.note] = [];
@@ -1267,6 +1291,7 @@ const [isDirty, setIsDirty] = useState(false);
             className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4"
             onClick={() => {
               setViewingSoldier(null);
+              setAvatarFile(null); setAvatarPreview(null); // Reset khi đóng modal
               setIsModalEditing(false); // Reset edit state on close
             }}
           >
@@ -1275,15 +1300,15 @@ const [isDirty, setIsDirty] = useState(false);
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }} // Increased max-width
               className="bg-white rounded-xl shadow-2xl w-full max-w-4xl p-6"
-              onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="text-xl font-bold text-slate-800 flex items-center space-x-2">
                     <BookUser className="w-6 h-6 text-emerald-600" />
-                    <span>Chi tiết quân nhân</span>
+                    <span>Thông tin trích ngang của</span>
                   </h3>
-                  <p className="text-sm text-slate-500 mt-1">Thông tin trích ngang của <span className="font-semibold">{isModalEditing ? editForm?.name : viewingSoldier.name}</span></p>
+                  <p className="text-sm text-slate-500 mt-1"><span className="font-semibold">{isModalEditing ? editForm?.name : viewingSoldier.name}</span></p>
                 </div>
                 <div className="flex items-center space-x-2">
                   {!isModalEditing ? (
@@ -1291,6 +1316,8 @@ const [isDirty, setIsDirty] = useState(false);
                       onClick={() => {
                         setIsModalEditing(true);
                         setEditForm(viewingSoldier);
+                        setAvatarFile(null); // Reset file và preview khi bắt đầu sửa
+                        setAvatarPreview(null);
                       }} 
                       className="flex items-center space-x-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold transition"
                       title="Chỉnh sửa thông tin"
@@ -1311,6 +1338,7 @@ const [isDirty, setIsDirty] = useState(false);
                         onClick={() => {
                           setIsModalEditing(false);
                           setEditForm(null);
+                          setAvatarFile(null); setAvatarPreview(null); // Reset khi hủy
                         }} 
                         className="flex items-center space-x-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold transition"
                       >
@@ -1319,125 +1347,136 @@ const [isDirty, setIsDirty] = useState(false);
                       </button>
                     </div>
                   )}
-                  <button onClick={() => { setViewingSoldier(null); setIsModalEditing(false); }} className="p-1.5 text-slate-400 hover:text-slate-700">
+                  <button onClick={() => { setViewingSoldier(null); setIsModalEditing(false); setAvatarFile(null); setAvatarPreview(null); }} className="p-1.5 text-slate-400 hover:text-slate-700">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
               </div>
               
-              {isModalEditing && editForm ? (
-                <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-4 text-sm">
-                  {/* Column 1: Basic & Military Info */}
-                  <div className="space-y-3">
-                    <h4 className="font-bold text-slate-600 border-b pb-1 mb-2">Thông tin cơ bản</h4>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Họ và tên</label><input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Ngày sinh</label><input type="text" value={editForm.dateOfBirth} onChange={e => setEditForm({...editForm, dateOfBirth: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Số CCCD</label><input type="text" value={editForm.cccd} onChange={e => setEditForm({...editForm, cccd: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Quê quán</label><input type="text" value={editForm.hometown} onChange={e => setEditForm({...editForm, hometown: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Trú quán</label><input type="text" value={editForm.currentResidence} onChange={e => setEditForm({...editForm, currentResidence: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                    
-                    <h4 className="font-bold text-slate-600 border-b pb-1 mb-2 pt-4">Trình độ & Chính trị</h4>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Dân tộc</label><input type="text" value={editForm.ethnicity} onChange={e => setEditForm({...editForm, ethnicity: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Tôn giáo</label><input type="text" value={editForm.religion} onChange={e => setEditForm({...editForm, religion: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Văn hóa</label><input type="text" value={editForm.education} onChange={e => setEditForm({...editForm, education: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Ngày vào Đoàn</label><input type="text" value={editForm.youthUnionJoinDate} onChange={e => setEditForm({...editForm, youthUnionJoinDate: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Ngày vào Đảng</label><input type="text" value={editForm.partyJoinDate} onChange={e => setEditForm({...editForm, partyJoinDate: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
+              <div className="mt-6 flex flex-col md:flex-row gap-6">
+                {/* Cột ảnh đại diện */}
+                <div className="w-full md:w-1/4 flex-shrink-0">
+                  <div className="aspect-[3/4] bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden relative group">
+                    <img 
+                      src={avatarPreview || (isModalEditing ? editForm?.avatarUrl : viewingSoldier.avatarUrl) || '/avatar-placeholder.png'}
+                      alt={`Ảnh thẻ của ${viewingSoldier.name}`}
+                      className="w-full h-full object-cover"
+                      onError={(e) => { e.currentTarget.src = '/avatar-placeholder.png'; }} // Fallback nếu link ảnh lỗi
+                    />
+                    {isModalEditing && (
+                      <label htmlFor="avatar-upload" className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                        <UploadCloud className="w-8 h-8" />
+                        <span className="text-xs font-semibold mt-1">Chọn ảnh</span>
+                      </label>
+                    )}
                   </div>
-
-                  {/* Column 2: Military Career */}
-                  <div className="space-y-3">
-                    <h4 className="font-bold text-slate-600 border-b pb-1 mb-2">Quá trình công tác</h4>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Đơn vị</label>
-                      <select value={editForm.unit} onChange={e => setEditForm({...editForm, unit: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500">
-                        {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                      </select>
-                    </div>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Cấp bậc</label>
-                      <select value={editForm.rank} onChange={e => setEditForm({...editForm, rank: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500">
-                        {RANKS.map(r => <option key={r} value={r}>{r}</option>)}
-                      </select>
-                    </div>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Ngày nhận CB</label><input type="text" value={editForm.rankReceivedDate} onChange={e => setEditForm({...editForm, rankReceivedDate: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Chức vụ</label>
-                      <select value={editForm.position} onChange={e => setEditForm({...editForm, position: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500">
-                        {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                    </div>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Ngày nhận CV</label><input type="text" value={editForm.positionReceivedDate} onChange={e => setEditForm({...editForm, positionReceivedDate: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Ngày nhập ngũ</label><input type="text" value={editForm.enlistmentDate} onChange={e => setEditForm({...editForm, enlistmentDate: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                    
-                    <h4 className="font-bold text-slate-600 border-b pb-1 mb-2 pt-4">Trạng thái hiện tại</h4>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Trạng thái</label>
-                      <select value={editForm.note} onChange={e => setEditForm({...editForm, note: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500">
-                        {NOTES_PRESETS.map(n => <option key={n.value} value={n.value}>{n.label}</option>)}
-                      </select>
-                    </div>
-                    <div className="grid grid-cols-3 items-start"><label className="text-slate-500 col-span-1 mt-1">Ghi chú</label><textarea value={editForm.remark} onChange={e => setEditForm({...editForm, remark: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" rows={2}></textarea></div>
-                  </div>
-
-                  {/* Column 3: Family */}
-                  <div className="space-y-3">
-                    <h4 className="font-bold text-slate-600 border-b pb-1 mb-2">Thông tin gia đình</h4>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Họ tên cha</label><input type="text" value={editForm.fatherName} onChange={e => setEditForm({...editForm, fatherName: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Họ tên mẹ</label><input type="text" value={editForm.motherName} onChange={e => setEditForm({...editForm, motherName: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Họ tên vợ</label><input type="text" value={editForm.wifeName} onChange={e => setEditForm({...editForm, wifeName: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Số con</label><input type="text" value={editForm.numberOfChildren} onChange={e => setEditForm({...editForm, numberOfChildren: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Con thứ mấy</label><input type="text" value={editForm.childOrder} onChange={e => setEditForm({...editForm, childOrder: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                    <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">SĐT liên hệ</label><input type="text" value={editForm.contactPhone} onChange={e => setEditForm({...editForm, contactPhone: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
-                  </div>
+                  {isModalEditing && editForm && (
+                    <input
+                      id="avatar-upload"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setAvatarFile(file);
+                          setAvatarPreview(URL.createObjectURL(file));
+                        } else {
+                          setAvatarFile(null);
+                          setAvatarPreview(null);
+                        }
+                      }}
+                    />
+                  )}
                 </div>
-              ) : (
-                <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-4 text-sm">
-                  {/* Column 1: Basic & Military Info */}
-                  <div className="space-y-4">
-                    <h4 className="font-bold text-slate-600 border-b pb-1 mb-2">Thông tin cơ bản</h4>
-                    <div><strong className="text-slate-500 w-28 inline-block">Họ và tên:</strong> <span className="font-semibold text-slate-800">{viewingSoldier.name}</span></div>
-                    <div><strong className="text-slate-500 w-28 inline-block">Ngày sinh:</strong> {viewingSoldier.dateOfBirth || <i className="text-slate-400">Chưa có</i>}</div>
-                    <div><strong className="text-slate-500 w-28 inline-block">Số CCCD:</strong> {viewingSoldier.cccd || <i className="text-slate-400">Chưa có</i>}</div>
-                    <div><strong className="text-slate-500 w-28 inline-block">Quê quán:</strong> {viewingSoldier.hometown || <i className="text-slate-400">Chưa có</i>}</div>
-                    <div><strong className="text-slate-500 w-28 inline-block">Trú quán:</strong> {viewingSoldier.currentResidence || <i className="text-slate-400">Chưa có</i>}</div>
-                    
-                    <h4 className="font-bold text-slate-600 border-b pb-1 mb-2 pt-4">Trình độ & Chính trị</h4>
-                    <div><strong className="text-slate-500 w-28 inline-block">Dân tộc:</strong> {viewingSoldier.ethnicity || <i className="text-slate-400">Chưa có</i>}</div>
-                    <div><strong className="text-slate-500 w-28 inline-block">Tôn giáo:</strong> {viewingSoldier.religion || <i className="text-slate-400">Chưa có</i>}</div>
-                    <div><strong className="text-slate-500 w-28 inline-block">Văn hóa:</strong> {viewingSoldier.education || <i className="text-slate-400">Chưa có</i>}</div>
-                    <div><strong className="text-slate-500 w-28 inline-block">Ngày vào Đoàn:</strong> {viewingSoldier.youthUnionJoinDate || <i className="text-slate-400">Chưa có</i>}</div>
-                    <div><strong className="text-slate-500 w-28 inline-block">Ngày vào Đảng:</strong> {viewingSoldier.partyJoinDate || <i className="text-slate-400">Chưa có</i>}</div>
-                  </div>
 
-                  {/* Column 2: Military Career */}
-                  <div className="space-y-4">
-                    <h4 className="font-bold text-slate-600 border-b pb-1 mb-2">Quá trình công tác</h4>
-                    <div><strong className="text-slate-500 w-28 inline-block">Đơn vị:</strong> {viewingSoldier.unit}</div>
-                    <div><strong className="text-slate-500 w-28 inline-block">Cấp bậc:</strong> {viewingSoldier.rank}</div>
-                    <div><strong className="text-slate-500 w-28 inline-block">Ngày nhận CB:</strong> {viewingSoldier.rankReceivedDate || <i className="text-slate-400">Chưa có</i>}</div>
-                    <div><strong className="text-slate-500 w-28 inline-block">Chức vụ:</strong> {viewingSoldier.position}</div>
-                    <div><strong className="text-slate-500 w-28 inline-block">Ngày nhận CV:</strong> {viewingSoldier.positionReceivedDate || <i className="text-slate-400">Chưa có</i>}</div>
-                    <div><strong className="text-slate-500 w-28 inline-block">Ngày nhập ngũ:</strong> {viewingSoldier.enlistmentDate || <i className="text-slate-400">Chưa có</i>}</div>
-                    
-                    <h4 className="font-bold text-slate-600 border-b pb-1 mb-2 pt-4">Trạng thái hiện tại</h4>
-                    <div><strong className="text-slate-500 w-28 inline-block">Trạng thái:</strong> 
-                      <span className={`font-semibold ${viewingSoldier.note === "Có mặt" || !viewingSoldier.note ? 'text-emerald-700' : 'text-amber-700'}`}>
-                        {viewingSoldier.note || "Có mặt"}
-                      </span>
+                {/* Cột thông tin chi tiết */}
+                <div className="w-full md:w-3/4">
+                  {isModalEditing && editForm ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                      {/* Column 1: Basic & Military Info */}
+                      <div className="space-y-3">
+                        <h4 className="font-bold text-slate-600 border-b pb-1 mb-2">Thông tin cơ bản</h4>
+                        <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Họ và tên</label><input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
+                        <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Ngày sinh</label><input type="text" value={editForm.dateOfBirth} onChange={e => setEditForm({...editForm, dateOfBirth: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
+                        <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Số CCCD</label><input type="text" value={editForm.cccd} onChange={e => setEditForm({...editForm, cccd: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
+                        <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Quê quán</label><input type="text" value={editForm.hometown} onChange={e => setEditForm({...editForm, hometown: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
+                        <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Trú quán</label><input type="text" value={editForm.currentResidence} onChange={e => setEditForm({...editForm, currentResidence: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
+                        
+                        <h4 className="font-bold text-slate-600 border-b pb-1 mb-2 pt-4">Quá trình công tác</h4>
+                        <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Đơn vị</label>
+                          <select value={editForm.unit} onChange={e => setEditForm({...editForm, unit: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500">
+                            {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                          </select>
+                        </div>
+                        <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Cấp bậc</label>
+                          <select value={editForm.rank} onChange={e => setEditForm({...editForm, rank: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500">
+                            {RANKS.map(r => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                        </div>
+                        <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Chức vụ</label>
+                          <select value={editForm.position} onChange={e => setEditForm({...editForm, position: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500">
+                            {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                          </select>
+                        </div>
+                        <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Ngày nhập ngũ</label><input type="text" value={editForm.enlistmentDate} onChange={e => setEditForm({...editForm, enlistmentDate: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
+                      </div>
+
+                      {/* Column 2: Family & Status */}
+                      <div className="space-y-3">
+                        <h4 className="font-bold text-slate-600 border-b pb-1 mb-2">Thông tin gia đình</h4>
+                        <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Họ tên cha</label><input type="text" value={editForm.fatherName} onChange={e => setEditForm({...editForm, fatherName: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
+                        <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Họ tên mẹ</label><input type="text" value={editForm.motherName} onChange={e => setEditForm({...editForm, motherName: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
+                        <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">SĐT liên hệ</label><input type="text" value={editForm.contactPhone} onChange={e => setEditForm({...editForm, contactPhone: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" /></div>
+
+                        <h4 className="font-bold text-slate-600 border-b pb-1 mb-2 pt-4">Trạng thái hiện tại</h4>
+                        <div className="grid grid-cols-3 items-center"><label className="text-slate-500 col-span-1">Trạng thái</label>
+                          <select value={editForm.note} onChange={e => setEditForm({...editForm, note: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500">
+                            {NOTES_PRESETS.map(n => <option key={n.value} value={n.value}>{n.label}</option>)}
+                          </select>
+                        </div>
+                        <div className="grid grid-cols-3 items-start"><label className="text-slate-500 col-span-1 mt-1">Ghi chú</label><textarea value={editForm.remark} onChange={e => setEditForm({...editForm, remark: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500" rows={2}></textarea></div>
+                      </div>
                     </div>
-                    <div><strong className="text-slate-500 w-28 inline-block align-top">Ghi chú:</strong> <span className="inline-block max-w-[calc(100%-8rem)]">{viewingSoldier.remark || <i className="text-slate-400">Không có</i>}</span></div>
-                  </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                      {/* Column 1: Basic & Military Info */}
+                      <div className="space-y-4">
+                        <h4 className="font-bold text-slate-600 border-b pb-1 mb-2">Thông tin cơ bản</h4>
+                        <div><strong className="text-slate-500 w-28 inline-block">Họ và tên:</strong> <span className="font-semibold text-slate-800">{viewingSoldier.name}</span></div>
+                        <div><strong className="text-slate-500 w-28 inline-block">Ngày sinh:</strong> {viewingSoldier.dateOfBirth || <i className="text-slate-400">Chưa có</i>}</div>
+                        <div><strong className="text-slate-500 w-28 inline-block">Số CCCD:</strong> {viewingSoldier.cccd || <i className="text-slate-400">Chưa có</i>}</div>
+                        <div><strong className="text-slate-500 w-28 inline-block">Quê quán:</strong> {viewingSoldier.hometown || <i className="text-slate-400">Chưa có</i>}</div>
+                        <div><strong className="text-slate-500 w-28 inline-block">Trú quán:</strong> {viewingSoldier.currentResidence || <i className="text-slate-400">Chưa có</i>}</div>
+                        
+                        <h4 className="font-bold text-slate-600 border-b pb-1 mb-2 pt-4">Quá trình công tác</h4>
+                        <div><strong className="text-slate-500 w-28 inline-block">Đơn vị:</strong> {viewingSoldier.unit}</div>
+                        <div><strong className="text-slate-500 w-28 inline-block">Cấp bậc:</strong> {viewingSoldier.rank}</div>
+                        <div><strong className="text-slate-500 w-28 inline-block">Chức vụ:</strong> {viewingSoldier.position}</div>
+                        <div><strong className="text-slate-500 w-28 inline-block">Ngày nhập ngũ:</strong> {viewingSoldier.enlistmentDate || <i className="text-slate-400">Chưa có</i>}</div>
+                      </div>
 
-                  {/* Column 3: Family */}
-                  <div className="space-y-4">
-                    <h4 className="font-bold text-slate-600 border-b pb-1 mb-2">Thông tin gia đình</h4>
-                    <div><strong className="text-slate-500 w-28 inline-block">Họ tên cha:</strong> {viewingSoldier.fatherName || <i className="text-slate-400">Chưa có</i>}</div>
-                    <div><strong className="text-slate-500 w-28 inline-block">Họ tên mẹ:</strong> {viewingSoldier.motherName || <i className="text-slate-400">Chưa có</i>}</div>
-                    <div><strong className="text-slate-500 w-28 inline-block">Họ tên vợ:</strong> {viewingSoldier.wifeName || <i className="text-slate-400">Chưa có</i>}</div>
-                    <div><strong className="text-slate-500 w-28 inline-block">Gia đình có mấy con:</strong> {viewingSoldier.numberOfChildren || <i className="text-slate-400">Chưa có</i>}</div>
-                    <div><strong className="text-slate-500 w-28 inline-block">Con thứ mấy:</strong> {viewingSoldier.childOrder || <i className="text-slate-400">Chưa có</i>}</div>
-                    <div><strong className="text-slate-500 w-28 inline-block">SĐT liên hệ:</strong> {viewingSoldier.contactPhone || <i className="text-slate-400">Chưa có</i>}</div>
-                  </div>
+                      {/* Column 2: Family & Status */}
+                      <div className="space-y-4">
+                        <h4 className="font-bold text-slate-600 border-b pb-1 mb-2">Thông tin gia đình</h4>
+                        <div><strong className="text-slate-500 w-28 inline-block">Họ tên cha:</strong> {viewingSoldier.fatherName || <i className="text-slate-400">Chưa có</i>}</div>
+                        <div><strong className="text-slate-500 w-28 inline-block">Họ tên mẹ:</strong> {viewingSoldier.motherName || <i className="text-slate-400">Chưa có</i>}</div>
+                        <div><strong className="text-slate-500 w-28 inline-block">SĐT liên hệ:</strong> {viewingSoldier.contactPhone || <i className="text-slate-400">Chưa có</i>}</div>
+
+                        <h4 className="font-bold text-slate-600 border-b pb-1 mb-2 pt-4">Trạng thái hiện tại</h4>
+                        <div><strong className="text-slate-500 w-28 inline-block">Trạng thái:</strong> 
+                          <span className={`font-semibold ${viewingSoldier.note === "Có mặt" || !viewingSoldier.note ? 'text-emerald-700' : 'text-amber-700'}`}>
+                            {viewingSoldier.note || "Có mặt"}
+                          </span>
+                        </div>
+                        <div><strong className="text-slate-500 w-28 inline-block align-top">Ghi chú:</strong> <span className="inline-block max-w-[calc(100%-8rem)]">{viewingSoldier.remark || <i className="text-slate-400">Không có</i>}</span></div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
 
-              <button onClick={() => { setViewingSoldier(null); setIsModalEditing(false); }} className="w-full text-center text-sm text-slate-500 hover:text-slate-800 mt-6 pt-4 border-t border-slate-200">Đóng</button>
+              <button onClick={() => { setViewingSoldier(null); setIsModalEditing(false); setAvatarFile(null); setAvatarPreview(null); }} className="w-full text-center text-sm text-slate-500 hover:text-slate-800 mt-6 pt-4 border-t border-slate-200">Đóng</button>
             </motion.div>
           </motion.div>
         )}
@@ -1471,6 +1510,7 @@ const [isDirty, setIsDirty] = useState(false);
   setHistorySearchDate={setHistorySearchDate}
   setSearchedReport={setSearchedReport}
   searchedReport={searchedReport}
+  handleDeleteReport={handleDeleteReport}
 />
  {/* Bảng tổng hợp quân số*/}
 
@@ -1520,7 +1560,11 @@ const [isDirty, setIsDirty] = useState(false);
   // Các hàm chức năng
   handleAddSoldier={handleAddSoldier}
   handleDelete={handleDelete}
+  otherReason={otherReason}
+  setOtherReason={setOtherReason}
   startEdit={startEdit}
+  handleFileImport={handleFileImport}
+  fileInputRef={fileInputRef}
   saveEdit={saveEdit}
   cancelEdit={cancelEdit}
   setViewingSoldier={setViewingSoldier}

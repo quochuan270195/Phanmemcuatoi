@@ -1,8 +1,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { Printer, ArrowLeft, Users, UserCheck, UserX, AlertTriangle, Edit2, Check, X, FileText, Save, Trash2, Eye, Search, ChevronDown } from 'lucide-react';
-import { onSnapshot, doc, setDoc } from "firebase/firestore";
-import { auth, db } from "./firebase";
+import { Printer, ArrowLeft, Users, UserCheck, UserX, AlertTriangle, Edit2, Check, X, FileText, Save, Trash2, Eye, Search, ChevronDown, EyeOff } from 'lucide-react';
+import { onSnapshot, doc, updateDoc } from "firebase/firestore";
+import { auth, db } from "../firebase";
 
 // Định nghĩa lại các kiểu dữ liệu cần thiết
 interface Soldier {
@@ -48,7 +48,7 @@ const NOTES_PRESETS = [
 , { value: "Lý do khác", label: "Vắng: Lý do khác..." }
 ];
 
-const DutyReportPage: React.FC = () => {
+const QuanSoTHNV: React.FC = () => {
   const location = useLocation();
   const initialRoster = (location.state as { roster: Soldier[] })?.roster || [];
 
@@ -78,6 +78,14 @@ const DutyReportPage: React.FC = () => {
   // State để quản lý việc hiển thị chi tiết quân số vắng
   const [showAbsentDetails, setShowAbsentDetails] = useState(false);
 
+  // State để quản lý việc ẩn/hiện các cột
+  const [showUnitColumn, setShowUnitColumn] = useState(true);
+  const [showRankColumn, setShowRankColumn] = useState(true);
+  const [showPositionColumn, setShowPositionColumn] = useState(true);
+  const [showStatusColumn, setShowStatusColumn] = useState(true);
+  const [showRemarkColumn, setShowRemarkColumn] = useState(true);
+  const [showActionsColumn, setShowActionsColumn] = useState(true);
+
   const startEdit = (soldier: Soldier) => {
     setEditingId(soldier.id);
     if (soldier.note.startsWith("Lý do khác: ")) {
@@ -95,6 +103,7 @@ const DutyReportPage: React.FC = () => {
     setOtherReason("");
   };
 
+  // Sửa hàm saveEdit: Chỉ cập nhật state cục bộ, không đồng bộ lên Firebase
   const saveEdit = () => {
     if (viewingReport) return; // Disable editing in historical view
     if (!editingId || !editForm) return;
@@ -102,14 +111,17 @@ const DutyReportPage: React.FC = () => {
     let finalNote = editForm.note;
     if (editForm.note === "Lý do khác") {
       if (!otherReason.trim()) {
-        finalNote = "Lý do khác"; // Or some default if you prefer
+        alert("Vui lòng nhập lý do khác.");
+        return;
       } else {
         finalNote = `Lý do khác: ${otherReason.trim()}`;
       }
     }
-    setRoster(roster.map(s => 
-      s.id === editingId ? { ...s, note: finalNote, remark: editForm.remark } : s
-    ));
+
+    // Chỉ cập nhật bản sao của roster trong trang này
+    const updatedRoster = roster.map(s => s.id === editingId ? { ...s, note: finalNote, remark: editForm.remark } : s);
+    setRoster(updatedRoster);
+
     setEditingId(null);
     setEditForm(null);
   };
@@ -201,7 +213,7 @@ const DutyReportPage: React.FC = () => {
     try {
       const docRef = doc(db, "baocao_quanso", userEmail);
       // Chỉ cập nhật trường dutyReports, không ảnh hưởng các dữ liệu khác
-      await setDoc(docRef, { duLieu: { dutyReports: reports } }, { merge: true });
+      await updateDoc(docRef, { "duLieu.dutyReports": reports });
     } catch (error) {
       console.error("Lỗi đồng bộ báo cáo nhiệm vụ:", error);
       alert("Đã xảy ra lỗi khi đồng bộ báo cáo.");
@@ -272,19 +284,32 @@ const DutyReportPage: React.FC = () => {
     const userEmail = auth.currentUser?.email;
     if (!userEmail) return;
 
+    // Hàm lắng nghe thay đổi
     const docRef = doc(db, "baocao_quanso", userEmail);
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      // Bỏ qua cập nhật nếu thay đổi đến từ chính client này
+      if (docSnap.metadata.hasPendingWrites) {
+        console.log("QuanSoTHNV: Bỏ qua cập nhật cục bộ.");
+        return;
+      }
       if (docSnap.exists()) {
         const data = docSnap.data().duLieu;
+        // Trang này chỉ cần lắng nghe và cập nhật danh sách báo cáo nhiệm vụ
         if (data && data.dutyReports) {
           setSavedReports(data.dutyReports);
-          console.log("Đã tải danh sách báo cáo nhiệm vụ từ Firebase.");
+          console.log("QuanSoTHNV: Đã đồng bộ danh sách báo cáo nhiệm vụ từ Firebase.");
         }
       }
     });
 
     return () => unsubscribe();
   }, []);
+
+  // Khi người dùng điều hướng đến trang này, luôn sử dụng roster được truyền từ DashboardPage
+  useEffect(() => {
+    const newInitialRoster = (location.state as { roster: Soldier[] })?.roster || [];
+    setRoster(newInitialRoster);
+  }, [location.state]);
 
   const filteredRoster = useMemo(() => {
     if (viewingReport) {
@@ -306,12 +331,30 @@ const DutyReportPage: React.FC = () => {
   }, [roster, filterNote, viewingReport]);
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 sm:p-8 print:p-0">
-      <div className="bg-white p-8 rounded-lg shadow-lg print:shadow-none print:rounded-none print:p-2">
-        <div className="flex justify-between items-center mb-8 print:mb-4">
-          <div className="text-center flex-grow">
-            <h1 className="text-2xl font-bold text-slate-800">BÁO CÁO QUÂN SỐ</h1>
-            <p className="text-slate-600">Tính đến thời điểm hiện tại</p>
+    <div className="min-h-screen bg-slate-50 font-sans pb-16 print:bg-white">
+      <div className="max-w-7xl mx-auto bg-white p-6 sm:p-8 rounded-b-lg shadow-lg print:shadow-none print:rounded-none print:p-4">
+        {/* Header */}
+        <div className="flex justify-between items-start mb-8 print:mb-4">
+          <div className="flex items-center space-x-4">
+            <div className="p-3 bg-emerald-100 rounded-lg text-emerald-700 print:hidden">
+                <FileText className="w-8 h-8" />
+            </div>
+            <div>
+                <div className="flex items-center space-x-2">
+                    <span className="text-xs bg-emerald-700 text-emerald-100 px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold print:hidden">
+                        Báo cáo nhiệm vụ
+                    </span>
+                </div>
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight mt-1 text-slate-800">
+                    Báo cáo Quân số Thực hiện Nhiệm vụ
+                </h1>
+                <p className="text-slate-500 text-sm mt-0.5 print:text-slate-700">
+                    {viewingReport 
+                        ? `Báo cáo lúc: ${new Date(viewingReport.id).toLocaleString('vi-VN')}`
+                        : `Tính đến thời điểm hiện tại`
+                    }
+                </p>
+            </div>
           </div>
           <div className="flex space-x-2 print:hidden">
             <Link
@@ -346,7 +389,7 @@ const DutyReportPage: React.FC = () => {
                 <span>Lưu báo cáo hôm nay</span>
               </h3>
               <p className="text-sm text-slate-600 mt-2">
-                Nhập tiêu đề để lưu lại báo cáo quân số tại thời điểm hiện tại. Dữ liệu sẽ được lưu vào bộ nhớ tạm của trình duyệt.
+                Nhập tiêu đề để lưu lại báo cáo quân số tại thời điểm hiện tại.
               </p>
               <div className="mt-6">
                 <label htmlFor="report-title" className="text-sm font-medium text-slate-700">Tiêu đề báo cáo</label>
@@ -367,15 +410,42 @@ const DutyReportPage: React.FC = () => {
           </div>
         )}
 
-        <div className="flex justify-end mb-4 print:hidden">
-          
-        </div>
-
-       
-
         {/* Bảng tổng hợp */}
         <section className="mb-8">
           <h2 className="text-xl font-bold text-slate-700 mb-4 border-b pb-2">I. BẢNG TỔNG HỢP BÁO CÁO QUÂN SỐ</h2>
+          {/* Thêm các thẻ thông tin nhanh */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 print:grid-cols-3">
+              <div className="bg-slate-100 p-4 rounded-lg border border-slate-200 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tổng quân số</p>
+                  <p className="text-3xl font-bold font-mono text-slate-900 mt-1">{reportToDisplay.total} <span className="text-sm font-normal text-slate-500">đ/c</span></p>
+                </div>
+                <div className="p-2.5 bg-slate-200 text-slate-700 rounded-full">
+                  <Users className="w-6 h-6" />
+                </div>
+              </div>
+
+              <div className={`p-4 rounded-lg border flex items-center justify-between ${viewingReport ? 'bg-slate-100 border-slate-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                <div>
+                  <p className={`text-xs font-semibold uppercase tracking-wider ${viewingReport ? 'text-slate-500' : 'text-emerald-700'}`}>Có mặt</p>
+                  <p className={`text-3xl font-bold font-mono mt-1 ${viewingReport ? 'text-slate-900' : 'text-emerald-900'}`}>{reportToDisplay.present} <span className={`text-sm font-normal ${viewingReport ? 'text-slate-500' : 'text-emerald-600'}`}>đ/c</span></p>
+                </div>
+                <div className={`p-2.5 rounded-full ${viewingReport ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                  <UserCheck className="w-6 h-6" />
+                </div>
+              </div>
+
+              <div className={`p-4 rounded-lg border flex items-center justify-between ${viewingReport ? 'bg-slate-100 border-slate-200' : 'bg-amber-50 border-amber-200'}`}>
+                <div>
+                  <p className={`text-xs font-semibold uppercase tracking-wider ${viewingReport ? 'text-slate-500' : 'text-amber-700'}`}>Vắng mặt</p>
+                  <p className={`text-3xl font-bold font-mono mt-1 ${viewingReport ? 'text-slate-900' : 'text-amber-900'}`}>{reportToDisplay.absent} <span className={`text-sm font-normal ${viewingReport ? 'text-slate-500' : 'text-amber-600'}`}>đ/c</span></p>
+                </div>
+                <div className={`p-2.5 rounded-full ${viewingReport ? 'bg-amber-100 text-amber-700' : 'bg-amber-100 text-amber-700'}`}>
+                  <UserX className="w-6 h-6" />
+                </div>
+              </div>
+            </div>
+          {/* Kết thúc các thẻ thông tin nhanh */}
           <table className="w-full text-left border-collapse border border-slate-300">
             <thead className="bg-slate-100 text-slate-700 font-bold">
               <tr>
@@ -534,28 +604,28 @@ const DutyReportPage: React.FC = () => {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse border border-slate-300 font-vietnamese-serif">
-            <thead className="bg-slate-100 text-slate-700 font-bold whitespace-nowrap">
+            <thead className="bg-slate-100 text-slate-700 font-bold">
               <tr>
-                <th className="p-3 border border-slate-300 text-center w-16">STT</th>
+                <th className="p-3 border border-slate-300 text-center w-14">STT</th>
                 <th className="p-3 border border-slate-300 text-center">Họ và tên</th>
-                <th className="p-3 border border-slate-300 text-center">Đơn vị</th>
-                <th className="p-3 border border-slate-300 text-center">Cấp bậc</th>
-                <th className="p-3 border border-slate-300 text-center">Chức vụ</th>
-                <th className="p-3 border border-slate-300 min-w-[200px] text-center">Trạng thái</th>
-                <th className="p-3 border border-slate-300 min-w-[200px] text-center">Ghi chú chi tiết</th>
-                <th className="p-3 border border-slate-300 w-24 text-center print:hidden">Thao tác</th>
+                {showUnitColumn && <th className="p-3 border border-slate-300 text-center">Đơn vị</th>}
+                {showRankColumn && <th className="p-3 border border-slate-300 text-center">Cấp bậc</th>}
+                {showPositionColumn && <th className="p-3 border border-slate-300 text-center">Chức vụ</th>}
+                {showStatusColumn && <th className="p-3 border border-slate-300 text-center">Trạng thái</th>}
+                {showRemarkColumn && <th className="p-3 border border-slate-300 text-center">Ghi chú chi tiết</th>}
+                {showActionsColumn && <th className="p-3 border border-slate-300 w-24 text-center print:hidden">Thao tác</th>}
               </tr>
             </thead>
             <tbody>
               {filteredRoster.length > 0 ? (
                 filteredRoster.map((soldier, index) => (
                   <tr key={soldier.id} className="hover:bg-slate-50">
-                    <td className="p-2 border border-slate-300 text-center font-mono whitespace-nowrap">{index + 1}</td>
-                    <td className="p-2 border border-slate-300 font-medium whitespace-nowrap">{soldier.name}</td>
-                    <td className="p-2 border border-slate-300 text-center whitespace-nowrap">{soldier.unit}</td>
-                    <td className="p-2 border border-slate-300 text-center whitespace-nowrap">{soldier.rank}</td>
-                    <td className="p-2 border border-slate-300 text-center whitespace-nowrap">{soldier.position}</td>
-                    <td className="p-2 border border-slate-300 text-center align-middle whitespace-nowrap">
+                    <td className="p-2 border border-slate-300 text-center font-mono">{index + 1}</td>
+                    <td className="p-2 border border-slate-300 font-medium">{soldier.name}</td>
+                    {showUnitColumn && <td className="p-2 border border-slate-300 text-center">{soldier.unit}</td>}
+                    {showRankColumn && <td className="p-2 border border-slate-300 text-center">{soldier.rank}</td>}
+                    {showPositionColumn && <td className="p-2 border border-slate-300 text-center">{soldier.position}</td>}
+                    {showStatusColumn && <td className="p-2 border border-slate-300 text-center align-middle">
                       {editingId === soldier.id ? (
                         <>
                           <select
@@ -584,8 +654,8 @@ const DutyReportPage: React.FC = () => {
                           {soldier.note.startsWith("Lý do khác: ") ? soldier.note.substring("Lý do khác: ".length) : (soldier.note || "Có mặt")}
                         </span>
                       )}
-                    </td>
-                    <td className="p-2 border border-slate-300 align-middle whitespace-nowrap">
+                    </td>}
+                    {showRemarkColumn && <td className="p-2 border border-slate-300 align-middle">
                       {editingId === soldier.id ? (
                         <input
                           type="text"
@@ -597,8 +667,8 @@ const DutyReportPage: React.FC = () => {
                       ) : (
                         <span>{soldier.remark}</span>
                       )}
-                    </td>
-                    <td className="p-2 border border-slate-300 text-center print:hidden whitespace-nowrap">
+                    </td>}
+                    {showActionsColumn && <td className="p-2 border border-slate-300 text-center print:hidden">
                       {editingId === soldier.id && !viewingReport ? (
                         <div className="flex items-center justify-center space-x-1">
                           <button onClick={saveEdit} className="p-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded transition" title="Lưu"><Check className="w-4 h-4" /></button>
@@ -607,7 +677,7 @@ const DutyReportPage: React.FC = () => {
                       ) : !viewingReport && (
                         <button onClick={() => startEdit(soldier)} className="p-1.5 text-slate-400 hover:text-emerald-700 hover:bg-slate-100 rounded transition" title="Sửa"><Edit2 className="w-4 h-4" /></button>
                       )}
-                    </td>
+                    </td>}
                   </tr>
                 ))
               ) : (
@@ -619,6 +689,33 @@ const DutyReportPage: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+        {/* Các nút ẩn/hiện cột */}
+        <div className="flex flex-wrap gap-2 mt-4 print:hidden">
+          <button onClick={() => setShowUnitColumn(!showUnitColumn)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center space-x-1.5">
+            {showUnitColumn ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            <span>Đơn vị</span>
+          </button>
+          <button onClick={() => setShowRankColumn(!showRankColumn)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center space-x-1.5">
+            {showRankColumn ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            <span>Cấp bậc</span>
+          </button>
+          <button onClick={() => setShowPositionColumn(!showPositionColumn)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center space-x-1.5">
+            {showPositionColumn ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            <span>Chức vụ</span>
+          </button>
+          <button onClick={() => setShowStatusColumn(!showStatusColumn)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center space-x-1.5">
+            {showStatusColumn ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            <span>Trạng thái</span>
+          </button>
+          <button onClick={() => setShowRemarkColumn(!showRemarkColumn)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center space-x-1.5">
+            {showRemarkColumn ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            <span>Ghi chú</span>
+          </button>
+          <button onClick={() => setShowActionsColumn(!showActionsColumn)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center space-x-1.5">
+            {showActionsColumn ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            <span>Thao tác</span>
+          </button>
         </div>
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
             <div></div>
@@ -632,7 +729,7 @@ const DutyReportPage: React.FC = () => {
   );
 };
 
-export default DutyReportPage;
+export default QuanSoTHNV;
 
 interface ReportListItemProps {
   report: DutyReport;

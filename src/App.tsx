@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import LoginPage from './LoginPage';
 import DashboardPage from './DashboardPage';
-import DutyReportPage from './DutyReportPage'; // Import trang mới
 import RegistrationPage from './RegistrationPage';
+import QuanSoTHNV from './components/quansothnv'; // Import trang mới
 import { onAuthStateChanged, User as FirebaseUser, signOut } from 'firebase/auth';
 import { auth } from './firebase';
 import { User } from './types';
@@ -57,7 +57,7 @@ export default function App() {
     <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage onLogin={handleLogin} />} />
     <Route path="/register" element={user ? <Navigate to="/" replace /> : <RegistrationPage />} />
     <Route path="/" element={user ? <DashboardPage user={user} onLogout={handleLogout} /> : <Navigate to="/login" replace />} />
-  <Route path="/duty-report" element={user ? <DutyReportPage /> : <Navigate to="/login" replace />} />
+    <Route path="/quan-so-thnv" element={user ? <QuanSoTHNV /> : <Navigate to="/login" replace />} />
   </Routes>
  );
  }

@@ -40,7 +40,7 @@ const Danhsachbienche = ({
   editingId, editForm, setEditForm,
   setViewingSoldier, startEdit, saveEdit, cancelEdit, handleDelete,
   newForm, setNewForm, handleFileImport, fileInputRef,
-    filterNote, setFilterNote,
+    filterNote, setFilterNote, otherReason, setOtherReason,
 }: any) => {
 
 
@@ -553,16 +553,26 @@ const Danhsachbienche = ({
                                  {/* Status */}
                                  {showStatusColumn && (
                                    <td className="p-3 border border-slate-200 text-center">
-                                     {isEditing ? (
+                                     {isEditing ? (<>
                                        <select
                                          value={editForm?.note || ""}
                                          onChange={(e) => setEditForm((prev:any) => prev ? { ...prev, note: e.target.value } : null)}
                                          className="w-full bg-white border border-slate-300 rounded px-1.5 py-1 text-sm focus:outline-none focus:border-emerald-500 text-slate-800"
                                        >
-                                         {NOTES_PRESETS.map(n => (
+                                         {NOTES_PRESETS.map(n => ( // Sử dụng hằng số đã được cập nhật
                                            <option key={n.value} value={n.value}>{n.label}</option>
                                          ))}
                                        </select>
+                                       {editForm?.note === "Lý do khác" && (
+                                         <input
+                                           type="text"
+                                           value={otherReason}
+                                           onChange={e => setOtherReason(e.target.value)}
+                                           placeholder="Nhập lý do..."
+                                           className="w-full mt-1 bg-white border border-slate-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:border-emerald-500"
+                                         />
+                                       )}
+                                       </>
                                      ) : (
                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
                                          soldier.note === "Có mặt" || !soldier.note
