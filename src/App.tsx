@@ -3,7 +3,7 @@ import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-
 import LoginPage from './LoginPage';
 import DashboardPage from './DashboardPage';
 import RegistrationPage from './RegistrationPage';
-import QuanSoTHNV from './components/quansothnv'; // Import trang mới
+import Quansothnv from './components/Quansothnv'; // Import trang mới
 import { onAuthStateChanged, User as FirebaseUser, signOut } from 'firebase/auth';
 import { auth } from './firebase';
 import { User } from './types';
@@ -57,7 +57,7 @@ export default function App() {
     <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage onLogin={handleLogin} />} />
     <Route path="/register" element={user ? <Navigate to="/" replace /> : <RegistrationPage />} />
     <Route path="/" element={user ? <DashboardPage user={user} onLogout={handleLogout} /> : <Navigate to="/login" replace />} />
-    <Route path="/quan-so-thnv" element={user ? <QuanSoTHNV /> : <Navigate to="/login" replace />} />
+    <Route path="/quan-so-thnv" element={user ? <Quansothnv /> : <Navigate to="/login" replace />} />
   </Routes>
  );
  }
