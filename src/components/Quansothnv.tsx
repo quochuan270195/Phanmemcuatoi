@@ -79,11 +79,11 @@ const QuanSoTHNV: React.FC = () => {
   const [showAbsentDetails, setShowAbsentDetails] = useState(false);
 
   // State để quản lý việc ẩn/hiện các cột
-  const [showUnitColumn, setShowUnitColumn] = useState(true);
-  const [showRankColumn, setShowRankColumn] = useState(true);
-  const [showPositionColumn, setShowPositionColumn] = useState(true);
+  const [showUnitColumn, setShowUnitColumn] = useState(false);
+  const [showRankColumn, setShowRankColumn] = useState(false);
+  const [showPositionColumn, setShowPositionColumn] = useState(false);
   const [showStatusColumn, setShowStatusColumn] = useState(true);
-  const [showRemarkColumn, setShowRemarkColumn] = useState(true);
+  const [showRemarkColumn, setShowRemarkColumn] = useState(false);
   const [showActionsColumn, setShowActionsColumn] = useState(true);
 
   const startEdit = (soldier: Soldier) => {

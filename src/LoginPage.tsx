@@ -42,6 +42,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     }
   };
 
+  const handleOfflineLogin = () => {
+    onLogin({ name: 'Người dùng Offline', email: 'offline@example.com' });
+  };
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-slate-100">
       <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-2xl shadow-lg">
@@ -64,6 +68,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         >
           <img src="https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png" alt="Google logo" className="w-6 h-6" />
           <span className="text-sm font-semibold text-slate-700">Đăng nhập với Google</span>
+        </button>
+
+        {/* Nút đăng nhập Offline */}
+        <button
+          onClick={handleOfflineLogin}
+          className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-slate-500 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
+        >
+          <LogIn className="w-5 h-5" />
+          <span>Đăng nhập Offline (Dữ liệu cục bộ)</span>
         </button>
 
         <div className="relative">

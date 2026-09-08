@@ -520,9 +520,24 @@ const [isLoaded, setIsLoaded] = useState(false); // Ban đầu chưa tải xong 
       return;
     }
     
+    let avatarUrl = newForm.avatarUrl || ""; // Bắt đầu với URL hiện có (nếu có)
+
+    // Nếu có file ảnh mới được chọn, tải nó lên trước khi tạo quân nhân mới
+    if (avatarFile && user.email) {
+      try {
+        // Tạo một ID tạm thời cho file path để tránh trùng lặp
+        const tempId = Date.now();
+        const filePath = `avatars/${user.email}/${tempId}_${avatarFile.name}`;
+        avatarUrl = await uploadFileAndGetURL(avatarFile, filePath); // Cập nhật URL ảnh mới
+      } catch (error) {
+        console.error("Lỗi tải ảnh đại diện khi thêm mới:", error);
+        triggerToast("Không thể tải lên ảnh đại diện.", "info");
+        return; // Dừng lại nếu tải ảnh lỗi
+      }
+    }
+
     const newId = (Math.max(...roster.map(s => parseInt(s.id) || 0), 0) + 1).toString();
     const formattedEnlistment = newForm.enlistmentDate.trim() || `${new Date().getMonth() + 1}/${new Date().getFullYear()}`;
-    
     const addedSoldier: Soldier = {
       id: newId,
       name: newForm.name.trim(),
@@ -549,7 +564,7 @@ const [isLoaded, setIsLoaded] = useState(false); // Ban đầu chưa tải xong 
       contactPhone: newForm.contactPhone,
       rankReceivedDate: newForm.rankReceivedDate,
       positionReceivedDate: newForm.positionReceivedDate,
-      avatarUrl: newForm.avatarUrl,
+      avatarUrl: avatarUrl, // Sử dụng URL đã được cập nhật
     };
 
     const updatedRoster = [...roster, addedSoldier];
@@ -557,6 +572,7 @@ const [isLoaded, setIsLoaded] = useState(false); // Ban đầu chưa tải xong 
     dongBoDuLieuToanDien({ roster: updatedRoster }); // ĐỒNG BỘ NGAY LẬP TỨC
     setIsAdding(false);
     setNewForm({
+      // Reset tất cả các trường về giá trị mặc định
       name: "",
       rank: "B2",
       position: "Chiến sĩ",
@@ -583,6 +599,9 @@ const [isLoaded, setIsLoaded] = useState(false); // Ban đầu chưa tải xong 
       positionReceivedDate: "",
       avatarUrl: "",
     });
+    // Reset trạng thái file ảnh sau khi thêm thành công
+    setAvatarFile(null);
+    setAvatarPreview(null);
   };
 
   // Handle Delete Action

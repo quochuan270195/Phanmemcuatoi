@@ -38,11 +38,19 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      // onAuthStateChanged sẽ tự động xử lý việc setUser(null) và chuyển hướng
-    } catch (error) {
-      console.error("Lỗi khi đăng xuất:", error);
+    // Kiểm tra nếu là người dùng offline
+    if (user && user.email === 'offline@example.com') {
+      // Chỉ cần xóa trạng thái người dùng ở phía client
+      setUser(null);
+      // Việc chuyển hướng về trang đăng nhập sẽ được xử lý tự động bởi <Routes>
+    } else {
+      // Đối với người dùng online, thực hiện đăng xuất khỏi Firebase
+      try {
+        await signOut(auth);
+        // onAuthStateChanged sẽ tự động xử lý việc setUser(null)
+      } catch (error) {
+        console.error("Lỗi khi đăng xuất:", error);
+      }
     }
   };
 
